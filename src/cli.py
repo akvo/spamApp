@@ -171,5 +171,61 @@ def prep_boundary_cmd(
     console.print(f"[green]Saved:[/green] {out_path} ({len(result)} regions)")
 
 
+@app.command(name="init-boundaries")
+def init_boundaries_cmd(
+    countries: Annotated[
+        Optional[list[str]],
+        typer.Option("--country", "-c", help="ISO3 country codes (e.g., IND BRA)"),
+    ] = None,
+    levels: Annotated[
+        Optional[list[int]],
+        typer.Option("--level", "-l", help="Admin levels to download (0, 1, 2)"),
+    ] = None,
+    cache_path: Annotated[
+        str, typer.Option("--cache", help="GeoPackage cache path")
+    ] = "data/boundaries/gadm_cache.gpkg",
+) -> None:
+    """Download GADM boundaries into local GeoPackage cache.
+
+    Pre-downloads admin boundaries so the Streamlit app has instant dropdowns.
+    """
+    from src.boundaries import fetch_and_cache, list_cached_countries
+
+    if levels is None:
+        levels = [0, 1, 2]
+
+    if countries is None:
+        # Default set of major agricultural countries
+        countries = [
+            "ARG", "AUS", "BGD", "BRA", "CAN", "CHN", "COD", "COL",
+            "EGY", "ETH", "FRA", "DEU", "GHA", "IND", "IDN", "IRN",
+            "ITA", "JPN", "KEN", "MWI", "MYS", "MEX", "MOZ", "MMR",
+            "NPL", "NGA", "PAK", "PER", "PHL", "RUS", "ZAF", "ESP",
+            "LKA", "SDN", "TZA", "THA", "TUR", "UGA", "UKR", "GBR",
+            "USA", "VNM", "ZMB", "ZWE", "KHM",
+        ]
+
+    cache = Path(cache_path)
+    total = len(countries) * len(levels)
+    done = 0
+
+    from rich.progress import Progress
+
+    with Progress() as progress:
+        task = progress.add_task("Downloading GADM...", total=total)
+        for code in countries:
+            for level in levels:
+                progress.update(task, description=f"{code} level {level}")
+                try:
+                    fetch_and_cache(code, level, cache)
+                except Exception as e:
+                    console.print(f"[yellow]Skip {code} L{level}:[/yellow] {e}")
+                done += 1
+                progress.update(task, completed=done)
+
+    cached = list_cached_countries(cache)
+    console.print(f"[green]Done:[/green] {len(cached)} layers in {cache}")
+
+
 if __name__ == "__main__":
     app()

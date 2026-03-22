@@ -1,4 +1,4 @@
-"""Admin boundary loading: GADM direct download + custom overrides.
+"""Admin boundary loading: local GeoPackage cache + GADM fallback + custom overrides.
 
 Never imports raster.py (see CONTRACTS.md).
 All returned GeoDataFrames are in EPSG:4326.
@@ -19,6 +19,7 @@ BOUNDARY_SCHEMA = [
 ]
 
 DEFAULT_CUSTOM_DIR = Path("data/boundaries")
+DEFAULT_CACHE_PATH = Path("data/boundaries/gadm_cache.gpkg")
 
 _GADM_BASE_URL = "https://geodata.ucdavis.edu/gadm/gadm4.1/json"
 
@@ -128,6 +129,117 @@ def _fetch_gadm(country_code: str, admin_level: int) -> gpd.GeoDataFrame:
     return gdf
 
 
+def _cache_layer_name(country_code: str, admin_level: int) -> str:
+    """GeoPackage layer name for a country/level combo."""
+    return f"{country_code}_{admin_level}"
+
+
+def _read_cache(
+    country_code: str, admin_level: int, cache_path: Path = DEFAULT_CACHE_PATH
+) -> gpd.GeoDataFrame | None:
+    """Read boundaries from local GeoPackage cache. Returns None if not cached."""
+    if not cache_path.exists():
+        return None
+    layer = _cache_layer_name(country_code, admin_level)
+    try:
+        import fiona
+
+        layers = fiona.listlayers(cache_path)
+        if layer not in layers:
+            return None
+        return gpd.read_file(cache_path, layer=layer)
+    except Exception:
+        return None
+
+
+def _write_cache(
+    gdf: gpd.GeoDataFrame,
+    country_code: str,
+    admin_level: int,
+    cache_path: Path = DEFAULT_CACHE_PATH,
+) -> None:
+    """Write boundaries to local GeoPackage cache."""
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    layer = _cache_layer_name(country_code, admin_level)
+    gdf.to_file(cache_path, layer=layer, driver="GPKG")
+
+
+def fetch_and_cache(
+    country_code: str,
+    admin_level: int,
+    cache_path: Path = DEFAULT_CACHE_PATH,
+) -> gpd.GeoDataFrame:
+    """Fetch GADM data, cache locally, return the GeoDataFrame.
+
+    Reads from cache if available, downloads from GADM if not.
+    """
+    cached = _read_cache(country_code, admin_level, cache_path)
+    if cached is not None:
+        return cached
+
+    gdf = _fetch_gadm(country_code, admin_level)
+    _write_cache(gdf, country_code, admin_level, cache_path)
+    return gdf
+
+
+def list_cached_countries(cache_path: Path = DEFAULT_CACHE_PATH) -> list[dict]:
+    """List all countries/levels in the cache. Returns list of {code, level} dicts."""
+    if not cache_path.exists():
+        return []
+    try:
+        import fiona
+
+        layers = fiona.listlayers(cache_path)
+        results = []
+        for layer in layers:
+            parts = layer.rsplit("_", 1)
+            if len(parts) == 2:
+                results.append({"code": parts[0], "level": int(parts[1])})
+        return results
+    except Exception:
+        return []
+
+
+def get_cached_country_names(
+    cache_path: Path = DEFAULT_CACHE_PATH,
+) -> dict[str, str]:
+    """Return {country_name: country_code} for all level-0 cached countries."""
+    if not cache_path.exists():
+        return {}
+    entries = list_cached_countries(cache_path)
+    level0_codes = [e["code"] for e in entries if e["level"] == 0]
+
+    result = {}
+    for code in level0_codes:
+        gdf = _read_cache(code, 0, cache_path)
+        if gdf is not None:
+            name_col = "COUNTRY" if "COUNTRY" in gdf.columns else "NAME_0"
+            for name in gdf[name_col].unique():
+                result[name] = code
+    return dict(sorted(result.items()))
+
+
+def get_cached_states(
+    country_code: str, cache_path: Path = DEFAULT_CACHE_PATH
+) -> list[str]:
+    """Return sorted state names for a cached country."""
+    gdf = _read_cache(country_code, 1, cache_path)
+    if gdf is None:
+        return []
+    return sorted(gdf["NAME_1"].unique())
+
+
+def get_cached_districts(
+    country_code: str, state_name: str, cache_path: Path = DEFAULT_CACHE_PATH
+) -> list[str]:
+    """Return sorted district names for a cached state."""
+    gdf = _read_cache(country_code, 2, cache_path)
+    if gdf is None:
+        return []
+    filtered = gdf[gdf["NAME_1"] == state_name]
+    return sorted(filtered["NAME_2"].unique())
+
+
 def _gadm_to_standard(gdf: gpd.GeoDataFrame, admin_level: int) -> gpd.GeoDataFrame:
     """Convert a GADM GeoDataFrame to the standard boundary schema.
 
@@ -220,12 +332,12 @@ def get_boundary(
                     except (ValueError, Exception):
                         continue
 
-    # Fall back to GADM direct download
+    # Fall back to cached GADM, then remote GADM
     # Step 1: Resolve location name to country code
     country_code = _resolve_country_code(location)
 
-    # Step 2: Download GADM data for that country at the requested level
-    gdf = _fetch_gadm(country_code, admin_level)
+    # Step 2: Get GADM data (cache first, download if needed)
+    gdf = fetch_and_cache(country_code, admin_level)
 
     # Step 3: If admin_level > 0, filter to matching name
     if admin_level > 0:
@@ -271,6 +383,6 @@ def get_all_boundaries(
                     except (ValueError, Exception):
                         continue
 
-    # Fall back to GADM direct download
-    gdf = _fetch_gadm(country_code, admin_level)
+    # Fall back to cached GADM, then remote GADM
+    gdf = fetch_and_cache(country_code, admin_level)
     return _gadm_to_standard(gdf, admin_level)

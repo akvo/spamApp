@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from src.analyzer import analyze_location, rank_by_crop
-from src.boundaries import _fetch_gadm
+from src.boundaries import get_cached_country_names, get_cached_districts, get_cached_states
 from src.crops import CROPS, VARIABLES
 
 # --- Page config ---
@@ -31,77 +31,6 @@ CROP_NAMES = {
     code: info["name"]
     for code, info in sorted(CROPS.items(), key=lambda x: x[1]["name"])
 }
-
-# --- Known countries (GADM level 0) ---
-# Common countries list — avoids downloading the full GADM country list on every load
-COUNTRIES = {
-    "Argentina": "ARG",
-    "Australia": "AUS",
-    "Bangladesh": "BGD",
-    "Brazil": "BRA",
-    "Cambodia": "KHM",
-    "Canada": "CAN",
-    "China": "CHN",
-    "Colombia": "COL",
-    "DR Congo": "COD",
-    "Egypt": "EGY",
-    "Ethiopia": "ETH",
-    "France": "FRA",
-    "Germany": "DEU",
-    "Ghana": "GHA",
-    "India": "IND",
-    "Indonesia": "IDN",
-    "Iran": "IRN",
-    "Italy": "ITA",
-    "Japan": "JPN",
-    "Kenya": "KEN",
-    "Malawi": "MWI",
-    "Malaysia": "MYS",
-    "Mexico": "MEX",
-    "Mozambique": "MOZ",
-    "Myanmar": "MMR",
-    "Nepal": "NPL",
-    "Nigeria": "NGA",
-    "Pakistan": "PAK",
-    "Peru": "PER",
-    "Philippines": "PHL",
-    "Russia": "RUS",
-    "South Africa": "ZAF",
-    "Spain": "ESP",
-    "Sri Lanka": "LKA",
-    "Sudan": "SDN",
-    "Tanzania": "TZA",
-    "Thailand": "THA",
-    "Turkey": "TUR",
-    "Uganda": "UGA",
-    "Ukraine": "UKR",
-    "United Kingdom": "GBR",
-    "United States": "USA",
-    "Vietnam": "VNM",
-    "Zambia": "ZMB",
-    "Zimbabwe": "ZWE",
-}
-
-
-@st.cache_data(ttl=3600)
-def get_states(country_code: str) -> list[str]:
-    """Fetch state/province names for a country from GADM."""
-    try:
-        gdf = _fetch_gadm(country_code, 1)
-        return sorted(gdf["NAME_1"].unique())
-    except Exception:
-        return []
-
-
-@st.cache_data(ttl=3600)
-def get_districts(country_code: str, state_name: str) -> list[str]:
-    """Fetch district names for a state from GADM."""
-    try:
-        gdf = _fetch_gadm(country_code, 2)
-        filtered = gdf[gdf["NAME_1"] == state_name]
-        return sorted(filtered["NAME_2"].unique())
-    except Exception:
-        return []
 
 
 @st.cache_data(ttl=60)
@@ -126,19 +55,24 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("#### Location")
 
-    # Country dropdown
-    country_name = st.selectbox("Country", options=list(COUNTRIES.keys()))
-    country_code = COUNTRIES[country_name]
+    # Country dropdown — from local GeoPackage cache
+    countries = get_cached_country_names()
+    if not countries:
+        st.warning("No boundaries cached. Run `init-boundaries` first.")
+        st.stop()
 
-    # State dropdown (cascading)
-    states = get_states(country_code)
+    country_name = st.selectbox("Country", options=list(countries.keys()))
+    country_code = countries[country_name]
+
+    # State dropdown (cascading, from cache)
+    states = get_cached_states(country_code)
     state_options = ["(All — country level)"] + states
     state_name = st.selectbox("State / Province", options=state_options)
 
-    # District dropdown (cascading, only if state selected)
+    # District dropdown (cascading, from cache)
     district_name = None
     if state_name != "(All — country level)" and states:
-        districts = get_districts(country_code, state_name)
+        districts = get_cached_districts(country_code, state_name)
         district_options = ["(All — state level)"] + districts
         district_name = st.selectbox("District", options=district_options)
         if district_name == "(All — state level)":
