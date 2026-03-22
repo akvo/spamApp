@@ -237,9 +237,9 @@ with tab1:
 
         col_config = {}
         if not is_yield:
-            col_config[unit] = st.column_config.NumberColumn(format="%d")
+            col_config[unit] = st.column_config.NumberColumn(format="%,.0f")
         else:
-            col_config[unit] = st.column_config.NumberColumn(format="%.2f")
+            col_config[unit] = st.column_config.NumberColumn(format="%,.2f")
 
         st.dataframe(
             styled_df,
