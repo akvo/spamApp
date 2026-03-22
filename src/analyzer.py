@@ -50,14 +50,21 @@ def analyze_location(
     crops: list[str] | None = None,
     custom_boundary_dir: Path | None = None,
 ) -> AnalysisResult:
-    """On-the-fly analysis for a single location.
+    """Analyze crop stats for a location.
 
-    Gets boundary geometry, then computes zonal stats for all crops using
-    the "A" (all systems) tech level only.
+    Tries pre-built parquet index first (instant). Falls back to on-the-fly
+    raster processing if not indexed.
 
     For yield: computes weighted average (weighted by harvested area) instead of sum.
     """
     data_dir = Path(data_dir)
+
+    # Try index first (instant if available)
+    index_result = _try_index_lookup(
+        location, admin_level, variable, data_dir / "index"
+    )
+    if index_result is not None:
+        return index_result
 
     # Get boundary
     boundary_gdf = get_boundary(location, admin_level, custom_dir=custom_boundary_dir)
@@ -156,6 +163,72 @@ def _compute_yield(
         )
 
     return pd.DataFrame(rows)
+
+
+def _try_index_lookup(
+    location: str,
+    admin_level: int,
+    variable: str,
+    index_dir: Path = Path("data/index"),
+) -> AnalysisResult | None:
+    """Try to answer the query from the pre-built parquet index.
+
+    Returns AnalysisResult if data is found, None otherwise.
+    """
+    var_code = _VARIABLE_ZIP_MAP.get(variable, ("P",))[0]
+    index_path = index_dir / f"level_{admin_level}.parquet"
+    if not index_path.exists():
+        return None
+
+    df = pd.read_parquet(index_path)
+
+    # Filter to this location
+    location_df = df[df["admin_name"].str.lower() == location.lower()]
+    if location_df.empty:
+        return None
+
+    # Filter to the right variable
+    if "variable" in location_df.columns:
+        location_df = location_df[location_df["variable"] == var_code]
+    elif var_code != "P":
+        return None  # old index only has production
+
+    if location_df.empty:
+        return None
+
+    # Build crop_data DataFrame matching the on-the-fly format
+    from src.crops import TECH_LEVELS
+
+    crop_data = pd.DataFrame(
+        {
+            "crop_code": location_df["crop_code"].values,
+            "crop_name": location_df["crop_name"].values,
+            "category": location_df["category"].values,
+            "tech_level": "A",
+            "tech_name": TECH_LEVELS.get("A", "All"),
+            "value": location_df["value"].values
+            if "value" in location_df.columns
+            else location_df["production_mt"].values,
+        }
+    )
+
+    is_yield = variable == "yield"
+    if is_yield:
+        total = crop_data["value"].mean() if len(crop_data) > 0 else 0.0
+    else:
+        total = float(crop_data["value"].sum())
+
+    top_df = crop_data.nlargest(50, "value")
+    top_crops = list(zip(top_df["crop_name"], top_df["value"]))
+
+    return AnalysisResult(
+        location_name=location,
+        admin_level=admin_level,
+        variable=variable,
+        total=total,
+        crop_data=crop_data,
+        top_crops=top_crops,
+    )
 
 
 def rank_by_crop(

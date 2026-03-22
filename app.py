@@ -16,6 +16,52 @@ from src.boundaries import (
 )
 from src.crops import CROPS, VARIABLES
 
+
+# --- Cached wrappers for performance ---
+@st.cache_data(show_spinner=False)
+def _cached_analyze(location, admin_level, variable, year=2020):
+    """Cache analysis results — same inputs return instantly."""
+    return analyze_location(
+        location=location,
+        admin_level=admin_level,
+        data_dir=DATA_DIR,
+        year=year,
+        variable=variable,
+        top_n=50,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _cached_rank(crop_code, admin_level, top_n, country_code=None):
+    """Cache ranking results."""
+    return rank_by_crop(
+        crop_code,
+        admin_level=admin_level,
+        index_dir=INDEX_DIR,
+        top_n=top_n,
+        country_code=country_code,
+    )
+
+
+@st.cache_resource
+def _cached_countries():
+    return get_cached_country_names()
+
+
+@st.cache_resource
+def _cached_states(country_code):
+    return get_cached_states(country_code)
+
+
+@st.cache_resource
+def _cached_districts(country_code, state_name):
+    return get_cached_districts(country_code, state_name)
+
+
+@st.cache_resource
+def _cached_boundary_gdf(country_code, level):
+    return _read_cache(country_code, level)
+
 # --- Page config ---
 st.set_page_config(
     page_title="SPAM 2020 Crop Analyzer",
@@ -53,7 +99,7 @@ def get_index_info(level: int) -> dict:
 
 
 # --- Check cache ---
-countries = get_cached_country_names()
+countries = _cached_countries()
 if not countries:
     st.error(
         "No boundaries cached. Run `python -m src.cli init-boundaries` first."
@@ -70,13 +116,13 @@ with st.sidebar:
     country_name = st.selectbox("Country", options=list(countries.keys()))
     country_code = countries[country_name]
 
-    states = get_cached_states(country_code)
+    states = _cached_states(country_code)
     state_options = ["(All)"] + states
     state_name = st.selectbox("State / Province", options=state_options)
 
     district_name = None
     if state_name != "(All)" and states:
-        districts = get_cached_districts(country_code, state_name)
+        districts = _cached_districts(country_code, state_name)
         district_options = ["(All)"] + districts
         district_name = st.selectbox("District", options=district_options)
         if district_name == "(All)":
@@ -126,13 +172,8 @@ with tab1:
     if analyze_btn:
         with st.spinner(f"Analyzing {selected_location}..."):
             try:
-                result = analyze_location(
-                    location=selected_location,
-                    admin_level=selected_level,
-                    data_dir=DATA_DIR,
-                    year=2020,
-                    variable=variable,
-                    top_n=50,
+                result = _cached_analyze(
+                    selected_location, selected_level, variable
                 )
                 st.session_state.analysis_result = result
             except (ValueError, FileNotFoundError) as e:
@@ -350,17 +391,13 @@ with tab2:
 
     if rank_btn:
         try:
-            df = rank_by_crop(
-                crop_code,
-                admin_level=rank_level,
-                index_dir=INDEX_DIR,
-                top_n=top_n,
-                country_code=country_code,
+            df = _cached_rank(
+                crop_code, rank_level, top_n, country_code
             )
             # If a state is selected, filter districts to that state
             # by looking up which districts belong to it from GADM cache
             if selected_level == 1 and rank_level == 2 and not df.empty:
-                boundary_gdf = _read_cache(country_code, 2)
+                boundary_gdf = _cached_boundary_gdf(country_code, 2)
                 if boundary_gdf is not None and "NAME_1" in boundary_gdf.columns:
                     state_districts = set(
                         boundary_gdf[boundary_gdf["NAME_1"] == state_name][
@@ -492,7 +529,7 @@ with tab2:
             from streamlit_folium import st_folium
 
             name_col = f"NAME_{rank_level}"
-            boundary_gdf = _read_cache(country_code, rank_level)
+            boundary_gdf = _cached_boundary_gdf(country_code, rank_level)
 
             if boundary_gdf is not None and name_col in boundary_gdf.columns:
                 # Filter boundaries to children of selected region
@@ -507,12 +544,8 @@ with tab2:
 
                 # Get ALL production data for these regions (not just top N)
                 try:
-                    all_ranked = rank_by_crop(
-                        crop_code,
-                        admin_level=rank_level,
-                        index_dir=INDEX_DIR,
-                        top_n=9999,
-                        country_code=country_code,
+                    all_ranked = _cached_rank(
+                        crop_code, rank_level, 9999, country_code
                     )
                     # Filter to state's districts if needed
                     if rank_level == 2 and state_name != "(All)":
