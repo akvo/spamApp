@@ -163,8 +163,15 @@ def rank_by_crop(
     admin_level: int = 0,
     index_dir: Path = Path("data/index"),
     top_n: int = 10,
+    country_code: str | None = None,
+    parent_name: str | None = None,
 ) -> pd.DataFrame:
     """Top N regions for a crop from pre-built parquet index.
+
+    Args:
+        country_code: Filter to this country only.
+        parent_name: Filter to children of this parent region
+            (e.g., districts within a specific state).
 
     Returns DataFrame sorted descending by production_mt.
     """
@@ -173,11 +180,18 @@ def rank_by_crop(
 
     if not index_path.exists():
         raise FileNotFoundError(
-            f"Index not found: {index_path}. Run 'build-index --level {admin_level}' first."
+            f"Index not found: {index_path}. "
+            f"Run 'build-index --level {admin_level}' first."
         )
 
     df = pd.read_parquet(index_path)
     crop_df = df[df["crop_code"] == crop_code].copy()
-    crop_df = crop_df.sort_values("production_mt", ascending=False)
 
+    if country_code:
+        crop_df = crop_df[crop_df["country_code"] == country_code]
+
+    if parent_name and "parent_name" in crop_df.columns:
+        crop_df = crop_df[crop_df["parent_name"] == parent_name]
+
+    crop_df = crop_df.sort_values("production_mt", ascending=False)
     return crop_df.head(top_n).reset_index(drop=True)

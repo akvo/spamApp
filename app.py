@@ -345,7 +345,20 @@ with tab2:
                 admin_level=rank_level,
                 index_dir=INDEX_DIR,
                 top_n=top_n,
+                country_code=country_code,
             )
+            # If a state is selected, filter districts to that state
+            # by looking up which districts belong to it from GADM cache
+            if selected_level == 1 and rank_level == 2 and not df.empty:
+                boundary_gdf = _read_cache(country_code, 2)
+                if boundary_gdf is not None and "NAME_1" in boundary_gdf.columns:
+                    state_districts = set(
+                        boundary_gdf[boundary_gdf["NAME_1"] == state_name][
+                            "NAME_2"
+                        ]
+                    )
+                    df = df[df["admin_name"].isin(state_districts)]
+                    df = df.reset_index(drop=True)
             st.session_state.ranking_result = df
             st.session_state.ranking_crop = crop_name
             st.session_state.ranking_title = rank_title
