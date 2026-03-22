@@ -1,12 +1,14 @@
 """SPAM 2020 Crop Production Analyzer — Streamlit Dashboard."""
 
+import json
 from pathlib import Path
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 
-from src.analyzer import AnalysisResult, analyze_location, rank_by_crop
+from src.analyzer import analyze_location, rank_by_crop
+from src.boundaries import _fetch_gadm
 from src.crops import CROPS, VARIABLES
 
 # --- Page config ---
@@ -26,11 +28,82 @@ VARIABLE_OPTIONS = {
     "Yield (t/ha)": "yield",
 }
 CROP_NAMES = {
-    code: info["name"] for code, info in sorted(CROPS.items(), key=lambda x: x[1]["name"])
+    code: info["name"]
+    for code, info in sorted(CROPS.items(), key=lambda x: x[1]["name"])
+}
+
+# --- Known countries (GADM level 0) ---
+# Common countries list — avoids downloading the full GADM country list on every load
+COUNTRIES = {
+    "Argentina": "ARG",
+    "Australia": "AUS",
+    "Bangladesh": "BGD",
+    "Brazil": "BRA",
+    "Cambodia": "KHM",
+    "Canada": "CAN",
+    "China": "CHN",
+    "Colombia": "COL",
+    "DR Congo": "COD",
+    "Egypt": "EGY",
+    "Ethiopia": "ETH",
+    "France": "FRA",
+    "Germany": "DEU",
+    "Ghana": "GHA",
+    "India": "IND",
+    "Indonesia": "IDN",
+    "Iran": "IRN",
+    "Italy": "ITA",
+    "Japan": "JPN",
+    "Kenya": "KEN",
+    "Malawi": "MWI",
+    "Malaysia": "MYS",
+    "Mexico": "MEX",
+    "Mozambique": "MOZ",
+    "Myanmar": "MMR",
+    "Nepal": "NPL",
+    "Nigeria": "NGA",
+    "Pakistan": "PAK",
+    "Peru": "PER",
+    "Philippines": "PHL",
+    "Russia": "RUS",
+    "South Africa": "ZAF",
+    "Spain": "ESP",
+    "Sri Lanka": "LKA",
+    "Sudan": "SDN",
+    "Tanzania": "TZA",
+    "Thailand": "THA",
+    "Turkey": "TUR",
+    "Uganda": "UGA",
+    "Ukraine": "UKR",
+    "United Kingdom": "GBR",
+    "United States": "USA",
+    "Vietnam": "VNM",
+    "Zambia": "ZMB",
+    "Zimbabwe": "ZWE",
 }
 
 
-# --- Helper: get indexed crops/countries ---
+@st.cache_data(ttl=3600)
+def get_states(country_code: str) -> list[str]:
+    """Fetch state/province names for a country from GADM."""
+    try:
+        gdf = _fetch_gadm(country_code, 1)
+        return sorted(gdf["NAME_1"].unique())
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=3600)
+def get_districts(country_code: str, state_name: str) -> list[str]:
+    """Fetch district names for a state from GADM."""
+    try:
+        gdf = _fetch_gadm(country_code, 2)
+        filtered = gdf[gdf["NAME_1"] == state_name]
+        return sorted(filtered["NAME_2"].unique())
+    except Exception:
+        return []
+
+
 @st.cache_data(ttl=60)
 def get_index_info(level: int) -> dict:
     """Return available countries and crops from the index."""
@@ -51,15 +124,38 @@ with st.sidebar:
     st.caption("Crop Production Analyzer")
 
     st.markdown("---")
-    st.markdown("#### Location Analysis")
+    st.markdown("#### Location")
 
-    location = st.text_input("Location", value="India", help="Country, state, or district name")
+    # Country dropdown
+    country_name = st.selectbox("Country", options=list(COUNTRIES.keys()))
+    country_code = COUNTRIES[country_name]
 
-    admin_level = st.selectbox(
-        "Admin Level",
-        options=[0, 1, 2],
-        format_func=lambda x: {0: "Country", 1: "State / Province", 2: "District"}[x],
-    )
+    # State dropdown (cascading)
+    states = get_states(country_code)
+    state_options = ["(All — country level)"] + states
+    state_name = st.selectbox("State / Province", options=state_options)
+
+    # District dropdown (cascading, only if state selected)
+    district_name = None
+    if state_name != "(All — country level)" and states:
+        districts = get_districts(country_code, state_name)
+        district_options = ["(All — state level)"] + districts
+        district_name = st.selectbox("District", options=district_options)
+        if district_name == "(All — state level)":
+            district_name = None
+
+    # Determine actual location and admin level from selections
+    if district_name:
+        selected_location = district_name
+        selected_level = 2
+    elif state_name != "(All — country level)":
+        selected_location = state_name
+        selected_level = 1
+    else:
+        selected_location = country_name
+        selected_level = 0
+
+    st.markdown("---")
 
     variable_label = st.selectbox("Variable", options=list(VARIABLE_OPTIONS.keys()))
     variable = VARIABLE_OPTIONS[variable_label]
@@ -70,7 +166,6 @@ with st.sidebar:
     st.markdown("#### Crop Rankings")
 
     crop_name = st.selectbox("Crop", options=list(CROP_NAMES.values()))
-    # Reverse lookup code from name
     crop_code = next(code for code, name in CROP_NAMES.items() if name == crop_name)
 
     rank_level = st.selectbox(
@@ -81,7 +176,6 @@ with st.sidebar:
     )
 
     top_n = st.number_input("Top N", min_value=1, max_value=50, value=10)
-
     rank_btn = st.button("Show Rankings", use_container_width=True)
 
 
@@ -92,41 +186,33 @@ if "ranking_result" not in st.session_state:
     st.session_state.ranking_result = None
 if "ranking_crop" not in st.session_state:
     st.session_state.ranking_crop = None
-if "active_tab" not in st.session_state:
-    st.session_state.active_tab = "Location Analysis"
 
 
 # --- Run analysis ---
 if analyze_btn:
-    with st.spinner(f"Analyzing {location}..."):
+    with st.spinner(f"Analyzing {selected_location}..."):
         try:
             result = analyze_location(
-                location=location,
-                admin_level=admin_level,
+                location=selected_location,
+                admin_level=selected_level,
                 data_dir=DATA_DIR,
                 year=2020,
                 variable=variable,
                 top_n=50,
             )
             st.session_state.analysis_result = result
-            st.session_state.active_tab = "Location Analysis"
         except (ValueError, FileNotFoundError) as e:
             st.error(str(e))
 
 if rank_btn:
     try:
-        df = rank_by_crop(crop_code, admin_level=rank_level, index_dir=INDEX_DIR, top_n=top_n)
+        df = rank_by_crop(
+            crop_code, admin_level=rank_level, index_dir=INDEX_DIR, top_n=top_n
+        )
         st.session_state.ranking_result = df
         st.session_state.ranking_crop = crop_name
-        st.session_state.active_tab = "Crop Rankings"
     except FileNotFoundError as e:
         st.error(str(e))
-
-
-# --- Breadcrumb ---
-def show_breadcrumb(result: AnalysisResult):
-    parts = [f"**{result.location_name}**"]
-    st.caption(" / ".join(parts))
 
 
 # --- Tabs ---
@@ -137,7 +223,7 @@ tab1, tab2 = st.tabs(["Location Analysis", "Crop Rankings"])
 with tab1:
     result = st.session_state.analysis_result
     if result is None:
-        st.info("Enter a location in the sidebar and click **Analyze** to see crop statistics.")
+        st.info("Select a location and click **Analyze** to see crop statistics.")
     else:
         is_yield = result.variable == "yield"
         var_info = VARIABLES.get(result.variable[0].upper(), {})
@@ -151,7 +237,8 @@ with tab1:
             col3.metric("Weighted Avg", f"{result.total:,.2f} {unit}")
         else:
             col3.metric("Total", f"{result.total:,.0f}")
-        col4.metric("Crops with Data", len(result.crop_data[result.crop_data["value"] > 0]))
+        nonzero_count = len(result.crop_data[result.crop_data["value"] > 0])
+        col4.metric("Crops with Data", nonzero_count)
 
         st.markdown("---")
 
@@ -168,6 +255,7 @@ with tab1:
                 var_title = result.variable.replace("_", " ").title()
                 st.subheader(f"Top {top_n_display} Crops — {var_title} ({unit})")
 
+            fmt = ",.2f" if is_yield else ",.0f"
             chart = (
                 alt.Chart(chart_df)
                 .mark_bar(cornerRadiusEnd=4, color="#2e8b2e")
@@ -176,9 +264,7 @@ with tab1:
                     y=alt.Y("crop_name:N", sort="-x", title=""),
                     tooltip=[
                         alt.Tooltip("crop_name:N", title="Crop"),
-                        alt.Tooltip(
-                            "value:Q", title=unit, format=",.0f" if not is_yield else ",.2f"
-                        ),
+                        alt.Tooltip("value:Q", title=unit, format=fmt),
                         alt.Tooltip("category:N", title="Category"),
                     ],
                 )
@@ -188,8 +274,7 @@ with tab1:
 
         with summary_col:
             st.subheader("Summary")
-            nonzero = len(result.crop_data[result.crop_data["value"] > 0])
-            top_crop_name = result.top_crops[0][0] if result.top_crops else "—"
+            top_crop_name = result.top_crops[0][0] if result.top_crops else "-"
             top_crop_val = result.top_crops[0][1] if result.top_crops else 0
 
             m1, m2 = st.columns(2)
@@ -197,16 +282,16 @@ with tab1:
                 m1.metric("Weighted Avg", f"{result.total:,.2f}")
             else:
                 m1.metric("Total", f"{result.total:,.0f}")
-            m2.metric("Crops", str(nonzero))
+            m2.metric("Crops", str(nonzero_count))
 
             m3, m4 = st.columns(2)
             m3.metric("Top Crop", top_crop_name)
             if not is_yield and result.total > 0:
-                m4.metric("Top Share", f"{top_crop_val / result.total * 100:.1f}%")
+                share = top_crop_val / result.total * 100
+                m4.metric("Top Share", f"{share:.1f}%")
             else:
-                m4.metric(
-                    "Top Value", f"{top_crop_val:,.2f}" if is_yield else f"{top_crop_val:,.0f}"
-                )
+                val = f"{top_crop_val:,.2f}" if is_yield else f"{top_crop_val:,.0f}"
+                m4.metric("Top Value", val)
 
             # Category breakdown
             st.markdown("**Category Breakdown**")
@@ -217,7 +302,8 @@ with tab1:
                 .sort_values("value", ascending=False)
             )
             if not is_yield:
-                cat_df["pct"] = (cat_df["value"] / cat_df["value"].sum() * 100).round(1)
+                total_val = cat_df["value"].sum()
+                cat_df["pct"] = (cat_df["value"] / total_val * 100).round(1)
                 cat_chart = (
                     alt.Chart(cat_df)
                     .mark_bar(cornerRadiusEnd=4)
@@ -243,13 +329,15 @@ with tab1:
         st.subheader("All Crops Data")
 
         display_df = result.crop_data.copy()
-        display_df = display_df.sort_values("value", ascending=False).reset_index(drop=True)
+        display_df = display_df.sort_values("value", ascending=False)
+        display_df = display_df.reset_index(drop=True)
         display_df.index += 1
 
         if not is_yield and result.total > 0:
-            display_df["% of Total"] = (display_df["value"] / result.total * 100).round(1)
+            display_df["% of Total"] = (
+                display_df["value"] / result.total * 100
+            ).round(1)
 
-        # Clean up column names for display
         show_cols = ["crop_name", "category", "value"]
         if "% of Total" in display_df.columns:
             show_cols.append("% of Total")
@@ -263,24 +351,32 @@ with tab1:
 
         # Downloads
         dl1, dl2, _ = st.columns([1, 1, 4])
-        csv_data = display_df[show_cols].rename(columns=rename_map).to_csv(index=False)
-        dl1.download_button(
-            "Download CSV", csv_data, f"{result.location_name}_crops.csv", "text/csv"
+        csv_data = (
+            display_df[show_cols].rename(columns=rename_map).to_csv(index=False)
         )
-
-        import json
+        dl1.download_button(
+            "Download CSV",
+            csv_data,
+            f"{result.location_name}_crops.csv",
+            "text/csv",
+        )
 
         json_data = json.dumps(
             {
                 "location": result.location_name,
                 "variable": result.variable,
                 "total": result.total,
-                "crops": display_df[["crop_name", "category", "value"]].to_dict(orient="records"),
+                "crops": display_df[["crop_name", "category", "value"]].to_dict(
+                    orient="records"
+                ),
             },
             indent=2,
         )
         dl2.download_button(
-            "Download JSON", json_data, f"{result.location_name}_crops.json", "application/json"
+            "Download JSON",
+            json_data,
+            f"{result.location_name}_crops.json",
+            "application/json",
         )
 
 
@@ -291,34 +387,36 @@ with tab2:
 
     if ranking_df is None:
         st.info(
-            "Select a crop in the sidebar and click **Show Rankings** to see top producing regions."
+            "Select a crop in the sidebar and click "
+            "**Show Rankings** to see top producing regions."
         )
 
         # Show what's available in the index
         for lvl in [0, 1, 2]:
             info = get_index_info(lvl)
             if info["countries"]:
-                level_name = {0: "Countries", 1: "States", 2: "Districts"}[lvl]
-                crop_names = [CROPS[c]["name"] for c in info["crops"] if c in CROPS]
+                lvl_name = {0: "Countries", 1: "States", 2: "Districts"}[lvl]
+                crop_list = [CROPS[c]["name"] for c in info["crops"] if c in CROPS]
                 st.caption(
-                    f"**Level {lvl} ({level_name}):** "
+                    f"**Level {lvl} ({lvl_name}):** "
                     f"{', '.join(info['countries'])} — "
-                    f"Crops: {', '.join(crop_names)}"
+                    f"Crops: {', '.join(crop_list)}"
                 )
     else:
         if ranking_df.empty:
-            st.warning("No data found. The index may not contain this crop/level combination.")
+            st.warning(
+                "No data found. The index may not contain "
+                "this crop/level combination."
+            )
         else:
-            # Header
             col1, col2, col3 = st.columns(3)
             col1.metric("Crop", ranking_crop)
-            level_name = {0: "Countries", 1: "States", 2: "Districts"}[rank_level]
-            col2.metric("Level", level_name)
+            lvl_name = {0: "Countries", 1: "States", 2: "Districts"}[rank_level]
+            col2.metric("Level", lvl_name)
             col3.metric("Regions", len(ranking_df))
 
             st.markdown("---")
 
-            # Bar chart
             st.subheader(f"Top {len(ranking_df)} Regions — {ranking_crop} Production")
 
             chart = (
@@ -330,21 +428,23 @@ with tab2:
                     tooltip=[
                         alt.Tooltip("admin_name:N", title="Region"),
                         alt.Tooltip("country_name:N", title="Country"),
-                        alt.Tooltip("production_mt:Q", title="Production (mt)", format=",.0f"),
+                        alt.Tooltip(
+                            "production_mt:Q", title="Production (mt)", format=",.0f"
+                        ),
                     ],
                 )
                 .properties(height=max(300, len(ranking_df) * 35))
             )
             st.altair_chart(chart, use_container_width=True)
 
-            # Table
             st.subheader("Rankings Data")
-            show_df = ranking_df[["admin_name", "country_name", "production_mt"]].copy()
+            show_df = ranking_df[
+                ["admin_name", "country_name", "production_mt"]
+            ].copy()
             show_df.index = range(1, len(show_df) + 1)
             show_df.columns = ["Region", "Country", "Production (mt)"]
             st.dataframe(show_df, use_container_width=True)
 
-            # Download
             csv_data = show_df.to_csv(index_label="Rank")
             st.download_button(
                 "Download CSV",
