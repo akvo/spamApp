@@ -260,9 +260,9 @@ with tab1:
 
         col_config = {}
         if not is_yield:
-            col_config[unit] = st.column_config.NumberColumn(format="%,.0f")
+            col_config[unit] = st.column_config.NumberColumn(format=",.0f")
         else:
-            col_config[unit] = st.column_config.NumberColumn(format="%,.2f")
+            col_config[unit] = st.column_config.NumberColumn(format=",.2f")
 
         st.dataframe(
             styled_df,
@@ -609,7 +609,7 @@ with tab2:
             use_container_width=True,
             column_config={
                 "Production (mt)": st.column_config.NumberColumn(
-                    format="%,.0f"
+                    format=",.0f"
                 )
             },
         )
