@@ -64,9 +64,7 @@ def standardize_boundary(
             "country_code": country_code,
             "country_name": country_name,
             "parent_name": (
-                gdf[parent_col].values
-                if parent_col and parent_col in gdf.columns
-                else None
+                gdf[parent_col].values if parent_col and parent_col in gdf.columns else None
             ),
             "geometry": gdf.geometry.values,
         },
@@ -135,9 +133,7 @@ def get_boundary(
                 for path in custom_dir.glob(f"*_{admin_level}{ext}"):
                     try:
                         gdf = load_custom_boundaries(path)
-                        matches = gdf[
-                            gdf["admin_name"].str.lower() == location.lower()
-                        ]
+                        matches = gdf[gdf["admin_name"].str.lower() == location.lower()]
                         if not matches.empty:
                             return matches
                     except (ValueError, Exception):

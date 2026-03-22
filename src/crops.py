@@ -79,9 +79,7 @@ VARIABLES: dict[str, dict[str, str]] = {
     "Y": {"name": "Yield", "unit": "kg/ha"},
 }
 
-_FILENAME_PATTERN = re.compile(
-    r"spam\d{4}_V\dr\d_global_([PHAY])_([A-Z]{4})_([AIR])\.tif$"
-)
+_FILENAME_PATTERN = re.compile(r"spam\d{4}_V\dr\d_global_([PHAY])_([A-Z]{4})_([AIR])\.tif$")
 
 
 def parse_filename(filename: str) -> tuple[str, str, str]:

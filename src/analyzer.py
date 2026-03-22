@@ -65,9 +65,7 @@ def analyze_location(
     zip_path = _find_zip(data_dir, year, variable)
 
     # Compute zonal stats for all crops, tech level "A" only (totals)
-    crop_data = compute_all_crops(
-        zip_path, geometry, crops=crops, tech_levels=["A"]
-    )
+    crop_data = compute_all_crops(zip_path, geometry, crops=crops, tech_levels=["A"])
 
     # Compute total and top crops
     total = float(crop_data["value"].sum())

@@ -38,9 +38,7 @@ def build_index(
     existing_keys = set()
     if output_path.exists():
         existing_df = pd.read_parquet(output_path)
-        existing_keys = set(
-            zip(existing_df["admin_code"], existing_df["crop_code"])
-        )
+        existing_keys = set(zip(existing_df["admin_code"], existing_df["crop_code"]))
 
     # Determine which crops to process
     crop_codes = crops if crops else list(CROPS.keys())

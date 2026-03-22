@@ -10,6 +10,7 @@ class TestAnalyzeLocation:
     def test_returns_analysis_result(self, test_data_dir, covering_polygon, monkeypatch):
         """Mock boundary lookup to return our test polygon, then analyze."""
         import geopandas as gpd
+
         # Mock get_boundary to return a known geometry
         def mock_get_boundary(location, admin_level=0, custom_dir=None):
             return gpd.GeoDataFrame(

@@ -31,9 +31,7 @@ def get_vsi_path(zip_path: Path, variable: str, crop_code: str, tech_level: str)
         if name.endswith(suffix):
             return f"/vsizip/{zip_path}/{name}"
 
-    raise FileNotFoundError(
-        f"No file matching *{suffix} found in {zip_path.name}"
-    )
+    raise FileNotFoundError(f"No file matching *{suffix} found in {zip_path.name}")
 
 
 def compute_zonal_sum(raster_path: str, geometry: Geometry) -> float:

@@ -90,9 +90,7 @@ class TestParseFilename:
         assert result == ("A", "SOYB", "A")
 
     def test_handles_path_prefix(self):
-        result = parse_filename(
-            "spam2020V2r0_global_production/spam2020_V2r0_global_P_WHEA_A.tif"
-        )
+        result = parse_filename("spam2020V2r0_global_production/spam2020_V2r0_global_P_WHEA_A.tif")
         assert result == ("P", "WHEA", "A")
 
     def test_invalid_filename_raises(self):

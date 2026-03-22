@@ -105,16 +105,22 @@ class TestBuildIndex:
 
         # First run: WHEA only
         build_index(
-            data_dir=test_data_dir, admin_level=0,
-            output_dir=output_dir, year=2020, crops=["WHEA"],
+            data_dir=test_data_dir,
+            admin_level=0,
+            output_dir=output_dir,
+            year=2020,
+            crops=["WHEA"],
         )
         df1 = pd.read_parquet(output_dir / "level_0.parquet")
         assert set(df1["crop_code"]) == {"WHEA"}
 
         # Second run: RICE only (should append)
         build_index(
-            data_dir=test_data_dir, admin_level=0,
-            output_dir=output_dir, year=2020, crops=["RICE"],
+            data_dir=test_data_dir,
+            admin_level=0,
+            output_dir=output_dir,
+            year=2020,
+            crops=["RICE"],
         )
         df2 = pd.read_parquet(output_dir / "level_0.parquet")
         assert set(df2["crop_code"]) == {"WHEA", "RICE"}
