@@ -211,12 +211,18 @@ with tab1:
         st.subheader("All Crops Data")
 
         display_df = result.crop_data.copy()
+        display_df = display_df[display_df["value"] > 0]
         display_df = display_df.sort_values("value", ascending=False)
         display_df = display_df.reset_index(drop=True)
         display_df.index += 1
 
+        if is_yield:
+            display_df["value"] = display_df["value"].round(2)
+        else:
+            display_df["value"] = display_df["value"].round(0).astype(int)
+
         if not is_yield:
-            total = result.crop_data["value"].sum()
+            total = display_df["value"].sum()
             if total > 0:
                 display_df["% of Total"] = (
                     display_df["value"] / total * 100
@@ -227,10 +233,19 @@ with tab1:
             show_cols.append("% of Total")
 
         rename_map = {"crop_name": "Crop", "category": "Category", "value": unit}
+        styled_df = display_df[show_cols].rename(columns=rename_map)
+
+        col_config = {}
+        if not is_yield:
+            col_config[unit] = st.column_config.NumberColumn(format="%d")
+        else:
+            col_config[unit] = st.column_config.NumberColumn(format="%.2f")
+
         st.dataframe(
-            display_df[show_cols].rename(columns=rename_map),
+            styled_df,
             use_container_width=True,
             height=400,
+            column_config=col_config,
         )
 
         # Downloads
