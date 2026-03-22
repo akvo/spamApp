@@ -99,6 +99,46 @@ class TestAnalyzeLocation:
         assert values == sorted(values, reverse=True)
 
 
+class TestAnalyzeYield:
+    def test_yield_uses_weighted_mean(self, test_data_dir_multi, covering_polygon, monkeypatch):
+        """Yield should use weighted avg, not sum.
+
+        Yield raster has values 0..99, weight raster has all 2.0.
+        Weighted mean = sum(values * 2) / sum(2s) = 4950*2 / (100*2) = 49.5 per crop.
+        """
+        import geopandas as gpd
+
+        def mock_get_boundary(location, admin_level=0, custom_dir=None):
+            return gpd.GeoDataFrame(
+                {
+                    "admin_name": [location],
+                    "admin_code": ["TEST_0"],
+                    "admin_level": [admin_level],
+                    "country_code": ["TST"],
+                    "country_name": ["Testland"],
+                    "parent_name": [None],
+                    "geometry": [covering_polygon],
+                },
+                crs="EPSG:4326",
+            )
+
+        monkeypatch.setattr("src.analyzer.get_boundary", mock_get_boundary)
+
+        result = analyze_location(
+            location="Testland",
+            data_dir=test_data_dir_multi,
+            year=2020,
+            variable="yield",
+        )
+
+        assert result.variable == "yield"
+        # Each crop should have weighted avg = 49.5
+        for _, row in result.crop_data.iterrows():
+            assert abs(row["value"] - 49.5) < 0.1, f"{row['crop_code']}: {row['value']}"
+        # Total should not be a sum — it's a weighted average
+        assert result.total < 100  # should be ~49.5, not 99
+
+
 class TestRankByCrop:
     def test_returns_sorted_dataframe(self, tmp_path):
         """Create a test parquet index and verify ranking."""

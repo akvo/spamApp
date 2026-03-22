@@ -65,6 +65,54 @@ def compute_zonal_sum(raster_path: str, geometry: Geometry) -> float:
         return 0.0
 
 
+def compute_weighted_mean(
+    value_raster_path: str,
+    weight_raster_path: str,
+    geometry: Geometry,
+) -> float:
+    """Compute area-weighted mean: sum(value × weight) / sum(weight).
+
+    Used for yield: avg_yield = sum(yield_pixels × ha_pixels) / sum(ha_pixels).
+    Returns 0.0 if no valid pixels or total weight is 0.
+    """
+    try:
+        with rasterio.open(value_raster_path) as val_src:
+            val_image, _ = rasterio_mask(
+                val_src, [geometry], crop=True, nodata=val_src.nodata, all_touched=False
+            )
+            val_nodata = val_src.nodata
+
+        with rasterio.open(weight_raster_path) as wt_src:
+            wt_image, _ = rasterio_mask(
+                wt_src, [geometry], crop=True, nodata=wt_src.nodata, all_touched=False
+            )
+            wt_nodata = wt_src.nodata
+
+        val_data = val_image[0]
+        wt_data = wt_image[0]
+
+        # Build valid mask: both value and weight must be valid
+        valid_mask = ~np.isnan(val_data) & ~np.isnan(wt_data)
+        if val_nodata is not None and not np.isnan(val_nodata):
+            valid_mask &= val_data != val_nodata
+        if wt_nodata is not None and not np.isnan(wt_nodata):
+            valid_mask &= wt_data != wt_nodata
+        valid_mask &= val_data >= 0
+        valid_mask &= wt_data >= 0
+
+        val_valid = val_data[valid_mask]
+        wt_valid = wt_data[valid_mask]
+
+        total_weight = float(np.sum(wt_valid))
+        if total_weight == 0:
+            return 0.0
+
+        return float(np.sum(val_valid * wt_valid) / total_weight)
+
+    except ValueError:
+        return 0.0
+
+
 def compute_all_crops(
     zip_path: Path,
     geometry: Geometry,

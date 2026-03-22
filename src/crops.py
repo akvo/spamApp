@@ -76,7 +76,7 @@ VARIABLES: dict[str, dict[str, str]] = {
     "P": {"name": "Production", "unit": "metric tonnes"},
     "H": {"name": "Harvested Area", "unit": "hectares"},
     "A": {"name": "Physical Area", "unit": "hectares"},
-    "Y": {"name": "Yield", "unit": "kg/ha"},
+    "Y": {"name": "Yield", "unit": "t/ha"},
 }
 
 _FILENAME_PATTERN = re.compile(r"spam\d{4}_V\dr\d_global_([PHAY])_([A-Z]{4})_([AIR])\.tif$")

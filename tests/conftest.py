@@ -151,6 +151,75 @@ def test_data_dir(tmp_data_dir, test_zip):
     return tmp_data_dir / "data"
 
 
+@pytest.fixture
+def tiny_geotiff_weights(tmp_data_dir):
+    """10x10 GeoTIFF with weight values (all 2.0).
+
+    Same extent as tiny_geotiff. Used as harvested area weights for yield tests.
+    Weighted mean of tiny_geotiff values = sum(values * 2) / sum(2s)
+      = sum(values) / count = 4950 / 100 = 49.5
+    """
+    path = tmp_data_dir / "test_weights.tif"
+    data = np.full((10, 10), 2.0, dtype=np.float32)
+    transform = from_bounds(70.0, 20.0, 80.0, 30.0, 10, 10)
+
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=10,
+        width=10,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-1,
+    ) as dst:
+        dst.write(data, 1)
+
+    return path
+
+
+@pytest.fixture
+def test_zip_yield(tmp_data_dir, tiny_geotiff):
+    """ZIP mimicking yield data structure."""
+    zip_path = tmp_data_dir / "spam2020V2r0_global_yield.geotiff.zip"
+    subdir = "spam2020V2r0_global_yield"
+
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(tiny_geotiff, f"{subdir}/spam2020_V2r0_global_Y_WHEA_A.tif")
+        zf.write(tiny_geotiff, f"{subdir}/spam2020_V2r0_global_Y_RICE_A.tif")
+
+    return zip_path
+
+
+@pytest.fixture
+def test_zip_harvested_area(tmp_data_dir, tiny_geotiff_weights):
+    """ZIP mimicking harvested area data structure (uniform weights)."""
+    zip_path = tmp_data_dir / "spam2020V2r0_global_harvested_area.geotiff.zip"
+    subdir = "spam2020V2r0_global_harvested_area"
+
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(tiny_geotiff_weights, f"{subdir}/spam2020_V2r0_global_H_WHEA_A.tif")
+        zf.write(tiny_geotiff_weights, f"{subdir}/spam2020_V2r0_global_H_RICE_A.tif")
+
+    return zip_path
+
+
+@pytest.fixture
+def test_data_dir_multi(tmp_data_dir, test_zip, test_zip_yield, test_zip_harvested_area):
+    """Data directory with production, yield, and harvested area ZIPs."""
+    year_dir = tmp_data_dir / "data" / "2020"
+    year_dir.mkdir(parents=True, exist_ok=True)
+
+    import shutil
+
+    for zp in [test_zip, test_zip_yield, test_zip_harvested_area]:
+        shutil.copy(zp, year_dir / zp.name)
+
+    return tmp_data_dir / "data"
+
+
 def test_fixtures_sanity(tiny_geotiff, covering_polygon, test_zip):
     """Sanity check that fixtures are created correctly."""
     assert Path(tiny_geotiff).exists()

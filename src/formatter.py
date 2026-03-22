@@ -17,29 +17,45 @@ from src.crops import VARIABLES
 console = Console()
 
 
+def _format_value(value: float, variable: str) -> str:
+    """Format a value based on the variable type."""
+    if variable == "yield":
+        return f"{value:,.2f}"
+    return f"{value:,.0f}"
+
+
 def print_summary(result: AnalysisResult) -> None:
     """Print a Rich-formatted summary of an AnalysisResult."""
     var_info = VARIABLES.get(result.variable[0].upper(), {})
     unit = var_info.get("unit", "")
+    is_yield = result.variable == "yield"
 
     console.print()
     console.print(
         f"[bold]Location:[/bold] {result.location_name} (admin level {result.admin_level})"
     )
     console.print(f"[bold]Variable:[/bold] {result.variable} ({unit})")
-    console.print(f"[bold]Total:[/bold] {result.total:,.0f} {unit}")
+    if is_yield:
+        console.print(f"[bold]Weighted Avg:[/bold] {result.total:,.2f} {unit}")
+    else:
+        console.print(f"[bold]Total:[/bold] {result.total:,.0f} {unit}")
     console.print()
 
     # Top crops table
     table = Table(title=f"Top {len(result.top_crops)} Crops")
     table.add_column("Rank", style="dim", width=4)
     table.add_column("Crop", style="bold")
-    table.add_column("Value", justify="right")
-    table.add_column("% of Total", justify="right")
+    table.add_column(f"{'Avg Yield' if is_yield else 'Value'} ({unit})", justify="right")
+
+    if not is_yield:
+        table.add_column("% of Total", justify="right")
 
     for i, (name, value) in enumerate(result.top_crops, 1):
-        pct = (value / result.total * 100) if result.total > 0 else 0
-        table.add_row(str(i), name, f"{value:,.0f}", f"{pct:.1f}%")
+        if is_yield:
+            table.add_row(str(i), name, f"{value:,.2f}")
+        else:
+            pct = (value / result.total * 100) if result.total > 0 else 0
+            table.add_row(str(i), name, f"{value:,.0f}", f"{pct:.1f}%")
 
     console.print(table)
 

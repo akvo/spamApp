@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from src.raster import compute_all_crops, compute_zonal_sum, get_vsi_path
+from src.raster import compute_all_crops, compute_weighted_mean, compute_zonal_sum, get_vsi_path
 
 
 class TestGetVsiPath:
@@ -74,3 +74,31 @@ class TestComputeAllCrops:
     def test_filter_by_tech_level(self, test_zip, covering_polygon):
         df = compute_all_crops(test_zip, covering_polygon, tech_levels=["A"])
         assert all(df["tech_level"] == "A")
+
+
+class TestComputeWeightedMean:
+    def test_uniform_weights(self, tiny_geotiff, tiny_geotiff_weights, covering_polygon):
+        """With uniform weights (all 2.0), weighted mean = simple mean = 4950/100 = 49.5."""
+        result = compute_weighted_mean(
+            str(tiny_geotiff), str(tiny_geotiff_weights), covering_polygon
+        )
+        assert np.isclose(result, 49.5)
+
+    def test_returns_float(self, tiny_geotiff, tiny_geotiff_weights, covering_polygon):
+        result = compute_weighted_mean(
+            str(tiny_geotiff), str(tiny_geotiff_weights), covering_polygon
+        )
+        assert isinstance(result, float)
+
+    def test_outside_returns_zero(self, tiny_geotiff, tiny_geotiff_weights, outside_polygon):
+        result = compute_weighted_mean(
+            str(tiny_geotiff), str(tiny_geotiff_weights), outside_polygon
+        )
+        assert result == 0.0
+
+    def test_partial_coverage(self, tiny_geotiff, tiny_geotiff_weights, partial_polygon):
+        """Left half: cols 0-4, all rows. Mean of values = 2350/50 = 47.0."""
+        result = compute_weighted_mean(
+            str(tiny_geotiff), str(tiny_geotiff_weights), partial_polygon
+        )
+        assert np.isclose(result, 47.0)
