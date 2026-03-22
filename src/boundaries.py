@@ -200,10 +200,26 @@ def list_cached_countries(cache_path: Path = DEFAULT_CACHE_PATH) -> list[dict]:
         return []
 
 
+def _fix_gadm_name(name: str) -> str:
+    """Insert spaces before uppercase letters in GADM names.
+
+    'DemocraticRepublicoftheCongo' -> 'Democratic Republicofthe Congo'
+    Then fix 'ofthe' -> 'of the'.
+    """
+    import re
+
+    spaced = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)
+    return spaced.replace("ofthe ", "of the ")
+
+
 def get_cached_country_names(
     cache_path: Path = DEFAULT_CACHE_PATH,
 ) -> dict[str, str]:
-    """Return {country_name: country_code} for all level-0 cached countries."""
+    """Return {display_name: gadm_name} for all level-0 cached countries.
+
+    Keys are cleaned display names, values are the original GADM names
+    (needed for boundary lookups).
+    """
     if not cache_path.exists():
         return {}
     entries = list_cached_countries(cache_path)
@@ -214,8 +230,9 @@ def get_cached_country_names(
         gdf = _read_cache(code, 0, cache_path)
         if gdf is not None:
             name_col = "COUNTRY" if "COUNTRY" in gdf.columns else "NAME_0"
-            for name in gdf[name_col].unique():
-                result[name] = code
+            gadm_name = gdf[name_col].iloc[0]
+            display = _fix_gadm_name(gadm_name)
+            result[display] = code
     return dict(sorted(result.items()))
 
 
