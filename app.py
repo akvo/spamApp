@@ -9,6 +9,7 @@ import streamlit as st
 
 from src.analyzer import analyze_location, rank_by_crop
 from src.boundaries import (
+    _read_cache,
     get_cached_country_names,
     get_cached_districts,
     get_cached_states,
@@ -459,6 +460,76 @@ with tab2:
                 .properties(height=max(300, len(ranking_df) * 35))
             )
         st.altair_chart(chart, use_container_width=True)
+
+        # Choropleth map
+        st.subheader("Map")
+        try:
+            import folium
+            from streamlit_folium import st_folium
+
+            # Load boundary geometries from cache
+            name_col = f"NAME_{rank_level}"
+            boundary_gdf = _read_cache(country_code, rank_level)
+
+            if boundary_gdf is not None and name_col in boundary_gdf.columns:
+                # Merge production data with geometries
+                merge_df = ranking_df[["admin_name", "production_mt"]].copy()
+                map_gdf = boundary_gdf.merge(
+                    merge_df,
+                    left_on=name_col,
+                    right_on="admin_name",
+                    how="left",
+                )
+                map_gdf["production_mt"] = map_gdf["production_mt"].fillna(0)
+
+                # Center map on the data
+                bounds = map_gdf.total_bounds  # [minx, miny, maxx, maxy]
+                center_lat = (bounds[1] + bounds[3]) / 2
+                center_lon = (bounds[0] + bounds[2]) / 2
+
+                m = folium.Map(
+                    location=[center_lat, center_lon],
+                    zoom_start=5,
+                    tiles="cartodbpositron",
+                )
+
+                # Add choropleth
+                folium.Choropleth(
+                    geo_data=map_gdf.__geo_interface__,
+                    data=map_gdf,
+                    columns=[name_col, "production_mt"],
+                    key_on=f"feature.properties.{name_col}",
+                    fill_color="YlGn",
+                    fill_opacity=0.7,
+                    line_opacity=0.3,
+                    legend_name=f"{ranking_crop_name} Production (mt)",
+                    nan_fill_color="white",
+                ).add_to(m)
+
+                # Add tooltips
+                folium.GeoJson(
+                    map_gdf,
+                    style_function=lambda x: {
+                        "fillOpacity": 0,
+                        "weight": 0,
+                    },
+                    tooltip=folium.GeoJsonTooltip(
+                        fields=[name_col, "production_mt"],
+                        aliases=["Region", "Production (mt)"],
+                        localize=True,
+                    ),
+                ).add_to(m)
+
+                # Fit bounds
+                m.fit_bounds(
+                    [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
+                )
+
+                st_folium(m, use_container_width=True, height=500)
+            else:
+                st.caption("Map not available — boundaries not cached.")
+        except Exception as e:
+            st.caption(f"Map could not be rendered: {e}")
 
         # Table
         st.subheader("Rankings Data")
