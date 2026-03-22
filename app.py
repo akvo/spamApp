@@ -526,30 +526,29 @@ with tab2:
                 )
                 map_gdf["production_mt"] = map_gdf["production_mt"].fillna(0)
 
-                # Build colormap
+                # Build colormap with readable labels
                 vmax = map_gdf["production_mt"].max()
                 if vmax == 0:
                     vmax = 1
+
+                def _fmt(v):
+                    if v >= 1_000_000:
+                        return f"{v / 1_000_000:.1f}M mt"
+                    if v >= 1_000:
+                        return f"{v / 1_000:.0f}K mt"
+                    return f"{v:.0f} mt"
+
+                mid = vmax / 2
+                caption = (
+                    f"{ranking_crop_name} Production: "
+                    f"{_fmt(0)} — {_fmt(mid)} — {_fmt(vmax)}"
+                )
                 colormap = cm.LinearColormap(
                     colors=["#f7fcf5", "#74c476", "#005a32"],
                     vmin=0,
                     vmax=vmax,
-                    caption=f"{ranking_crop_name} Production",
+                    caption=caption,
                 )
-
-                # Human-readable tick labels
-                def _fmt(v):
-                    if v >= 1_000_000:
-                        return f"{v / 1_000_000:.1f}M"
-                    if v >= 1_000:
-                        return f"{v / 1_000:.0f}K"
-                    return f"{v:.0f}"
-
-                colormap.tick_labels = [
-                    _fmt(0),
-                    _fmt(vmax * 0.5),
-                    _fmt(vmax),
-                ]
 
                 def style_fn(feature):
                     val = feature["properties"].get("production_mt", 0)
