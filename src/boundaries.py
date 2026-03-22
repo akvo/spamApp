@@ -1,4 +1,4 @@
-"""Admin boundary loading: GADM via pygadm + custom overrides.
+"""Admin boundary loading: GADM direct download + custom overrides.
 
 Never imports raster.py (see CONTRACTS.md).
 All returned GeoDataFrames are in EPSG:4326.
@@ -7,7 +7,6 @@ All returned GeoDataFrames are in EPSG:4326.
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 import pygadm
 
 BOUNDARY_SCHEMA = [
@@ -20,6 +19,8 @@ BOUNDARY_SCHEMA = [
 ]
 
 DEFAULT_CUSTOM_DIR = Path("data/boundaries")
+
+_GADM_BASE_URL = "https://geodata.ucdavis.edu/gadm/gadm4.1/json"
 
 
 def validate_schema(gdf: gpd.GeoDataFrame) -> None:
@@ -85,17 +86,60 @@ def load_custom_boundaries(path: Path) -> gpd.GeoDataFrame:
     return gdf
 
 
+def _resolve_country_code(location: str) -> str:
+    """Look up GADM ISO3 code for a location name using pygadm.Names."""
+    try:
+        name_df = pygadm.Names(name=location)
+    except Exception:
+        raise ValueError(f"Location '{location}' not found in GADM database.")
+
+    if name_df.empty:
+        raise ValueError(f"Location '{location}' not found in GADM database.")
+
+    return name_df.iloc[0]["GID_0"]
+
+
+def _fetch_gadm(country_code: str, admin_level: int) -> gpd.GeoDataFrame:
+    """Download GADM boundaries directly from geodata.ucdavis.edu.
+
+    Returns a GeoDataFrame with GADM columns (GID_0, NAME_0, GID_1, NAME_1, etc.)
+    """
+    url = f"{_GADM_BASE_URL}/gadm41_{country_code}_{admin_level}.json"
+    try:
+        gdf = gpd.read_file(url)
+    except Exception:
+        raise ValueError(
+            f"Could not download GADM data for {country_code} level {admin_level}. "
+            f"URL: {url}"
+        )
+
+    if gdf.empty:
+        raise ValueError(f"No GADM data for {country_code} level {admin_level}")
+
+    return gdf
+
+
 def _gadm_to_standard(gdf: gpd.GeoDataFrame, admin_level: int) -> gpd.GeoDataFrame:
-    """Convert a pygadm GeoDataFrame to the standard boundary schema."""
-    name_col = f"NAME_{admin_level}"
-    code_col = f"GID_{admin_level}"
+    """Convert a GADM GeoDataFrame to the standard boundary schema."""
+    # GADM level 0 uses COUNTRY column, higher levels use NAME_N
+    if admin_level == 0:
+        name_col = "COUNTRY" if "COUNTRY" in gdf.columns else "NAME_0"
+    else:
+        name_col = f"NAME_{admin_level}"
+
+    code_col = f"GID_{admin_level}" if f"GID_{admin_level}" in gdf.columns else "GID_0"
 
     # Determine parent name
-    parent_col = f"NAME_{admin_level - 1}" if admin_level > 0 else None
+    if admin_level > 0:
+        parent_col = f"NAME_{admin_level - 1}"
+        if parent_col not in gdf.columns:
+            parent_col = "COUNTRY" if "COUNTRY" in gdf.columns else None
+    else:
+        parent_col = None
 
-    # Country info from level 0 columns
-    country_name_col = "NAME_0"
+    # Country info
     country_code_col = "GID_0"
+    country_name_col = "COUNTRY" if "COUNTRY" in gdf.columns else "NAME_0"
 
     result = gpd.GeoDataFrame(
         {
@@ -139,18 +183,27 @@ def get_boundary(
                     except (ValueError, Exception):
                         continue
 
-    # Fall back to pygadm
-    try:
-        gdf = pygadm.Items(name=location, admin=str(admin_level))
-    except Exception:
+    # Fall back to GADM direct download
+    # Step 1: Resolve location name to country code
+    country_code = _resolve_country_code(location)
+
+    # Step 2: Download GADM data for that country at the requested level
+    gdf = _fetch_gadm(country_code, admin_level)
+
+    # Step 3: If admin_level > 0, filter to matching name
+    if admin_level > 0:
+        name_col = f"NAME_{admin_level}"
+        if name_col in gdf.columns:
+            matches = gdf[gdf[name_col].str.lower() == location.lower()]
+            if not matches.empty:
+                return _gadm_to_standard(matches, admin_level)
+
         raise ValueError(
-            f"Location '{location}' not found at admin level {admin_level}. "
-            f"Try pygadm.Names(name='{location}') to search for similar names."
+            f"Location '{location}' not found at admin level {admin_level} "
+            f"in country {country_code}."
         )
 
-    if gdf.empty:
-        raise ValueError(f"Location '{location}' not found at admin level {admin_level}")
-
+    # Level 0: return the full country (may have multiple polygons for disputed areas)
     return _gadm_to_standard(gdf, admin_level)
 
 
@@ -159,35 +212,28 @@ def get_all_boundaries(
     country_code: str | None = None,
     custom_dir: Path | None = None,
 ) -> gpd.GeoDataFrame:
-    """Load ALL boundaries at a given admin level.
+    """Load ALL boundaries at a given admin level for a country.
 
     Merges custom overrides with GADM (custom takes precedence per country).
-    If country_code is provided, loads only that country's boundaries.
+    country_code is required (global all-country loading not supported via direct download).
     """
-    # Start with GADM
-    if country_code:
-        gdf = pygadm.Items(admin=str(country_code), content_level=admin_level)
-    else:
-        gdf = pygadm.Items(admin="*", content_level=admin_level)
+    if not country_code:
+        raise ValueError(
+            "country_code is required for get_all_boundaries. "
+            "Direct download does not support loading all countries at once."
+        )
 
-    result = _gadm_to_standard(gdf, admin_level)
-
-    # Merge custom overrides
+    # Check custom boundaries first
     if custom_dir:
         custom_dir = Path(custom_dir)
         if custom_dir.exists():
             for ext in [".gpkg", ".shp"]:
-                for path in custom_dir.glob(f"*_{admin_level}{ext}"):
+                for path in custom_dir.glob(f"{country_code}_{admin_level}{ext}"):
                     try:
-                        custom_gdf = load_custom_boundaries(path)
-                        # Remove GADM entries for countries present in custom data
-                        custom_countries = set(custom_gdf["country_code"])
-                        result = result[~result["country_code"].isin(custom_countries)]
-                        result = gpd.GeoDataFrame(
-                            pd.concat([result, custom_gdf], ignore_index=True),
-                            crs="EPSG:4326",
-                        )
+                        return load_custom_boundaries(path)
                     except (ValueError, Exception):
                         continue
 
-    return result
+    # Fall back to GADM direct download
+    gdf = _fetch_gadm(country_code, admin_level)
+    return _gadm_to_standard(gdf, admin_level)
