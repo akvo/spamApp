@@ -4,15 +4,15 @@
 
 | Task | Status | Layer | Deps | Description |
 |------|--------|-------|------|-------------|
-| T1 | TODO | 0 | — | `crops.py`: crop registry with categories + filename parser |
-| T2 | TODO | 0 | — | Test fixtures: tiny GeoTIFF + test polygon in conftest.py |
-| T3 | TODO | 1 | T1,T2 | `raster.py`: read GeoTIFF from ZIP, compute zonal sum |
-| T4 | TODO | 1 | T2 | `boundaries.py`: GADM lookup + custom boundary loading |
-| T5 | TODO | 2 | T3,T4 | `analyzer.py`: orchestrate on-the-fly analysis |
-| T6 | TODO | 2 | T3,T4 | `index.py`: build parquet index (incremental, single-crop) |
-| T7 | TODO | 2 | T6 | `analyzer.py`: rank_by_crop from parquet index |
-| T8 | TODO | 3 | T5,T7 | `formatter.py`: Rich table output, CSV/JSON export |
-| T9 | TODO | 3 | T5,T7,T8 | `cli.py`: Typer CLI with all commands |
+| T1 | DONE | 0 | — | `crops.py`: crop registry with categories + filename parser |
+| T2 | DONE | 0 | — | Test fixtures: tiny GeoTIFF + test polygon in conftest.py |
+| T3 | DONE | 1 | T1,T2 | `raster.py`: read GeoTIFF from ZIP, compute zonal sum |
+| T4 | DONE | 1 | T2 | `boundaries.py`: GADM lookup + custom boundary loading |
+| T5 | DONE | 2 | T3,T4 | `analyzer.py`: orchestrate on-the-fly analysis |
+| T6 | DONE | 2 | T3,T4 | `index.py`: build parquet index (incremental, single-crop) |
+| T7 | DONE | 2 | T6 | `analyzer.py`: rank_by_crop from parquet index |
+| T8 | DONE | 3 | T5,T7 | `formatter.py`: Rich table output, CSV/JSON export |
+| T9 | DONE | 3 | T5,T7,T8 | `cli.py`: Typer CLI with all commands |
 | T10 | TODO | 4 | T9 | Integration tests: end-to-end workflows |
 
 ## Extended Features (inspired by mapspamc)
