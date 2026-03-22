@@ -526,28 +526,15 @@ with tab2:
                 )
                 map_gdf["production_mt"] = map_gdf["production_mt"].fillna(0)
 
-                # Build colormap with readable labels
                 vmax = map_gdf["production_mt"].max()
                 if vmax == 0:
                     vmax = 1
 
-                def _fmt(v):
-                    if v >= 1_000_000:
-                        return f"{v / 1_000_000:.1f}M mt"
-                    if v >= 1_000:
-                        return f"{v / 1_000:.0f}K mt"
-                    return f"{v:.0f} mt"
-
-                mid = vmax / 2
-                caption = (
-                    f"{ranking_crop_name} Production: "
-                    f"{_fmt(0)} — {_fmt(mid)} — {_fmt(vmax)}"
-                )
+                # Internal colormap for styling only (not added to map)
                 colormap = cm.LinearColormap(
                     colors=["#f7fcf5", "#74c476", "#005a32"],
                     vmin=0,
                     vmax=vmax,
-                    caption=caption,
                 )
 
                 def style_fn(feature):
@@ -572,7 +559,32 @@ with tab2:
                     ),
                 ).add_to(m)
 
-                colormap.add_to(m)
+                # Clean HTML legend
+                def _fmt(v):
+                    if v >= 1_000_000:
+                        return f"{v / 1_000_000:.1f}M"
+                    if v >= 1_000:
+                        return f"{v / 1_000:.0f}K"
+                    return f"{v:.0f}"
+
+                legend_html = f"""
+                <div style="position:fixed; bottom:30px; left:50px; z-index:1000;
+                     background:white; padding:10px 14px; border-radius:6px;
+                     box-shadow:0 1px 4px rgba(0,0,0,0.2); font-size:12px;
+                     font-family:sans-serif;">
+                  <div style="margin-bottom:4px; font-weight:600;">
+                    {ranking_crop_name} Production (mt)
+                  </div>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span>{_fmt(0)}</span>
+                    <div style="width:120px; height:12px; border-radius:3px;
+                         background:linear-gradient(to right,
+                         #f7fcf5, #74c476, #005a32);"></div>
+                    <span>{_fmt(vmax)}</span>
+                  </div>
+                </div>
+                """
+                m.get_root().html.add_child(folium.Element(legend_html))
 
                 m.fit_bounds(
                     [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
