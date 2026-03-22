@@ -1,0 +1,26 @@
+# Data files (too large for git)
+data/2020/
+data/index/
+data/boundaries/*.gpkg
+data/boundaries/*.shp
+data/boundaries/*.dbf
+data/boundaries/*.shx
+data/boundaries/*.prj
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Tools
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db

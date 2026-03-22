@@ -1,0 +1,37 @@
+[project]
+name = "spamapp"
+version = "0.1.0"
+description = "Analyze MapSPAM 2020 crop production data by administrative region"
+requires-python = ">=3.11"
+dependencies = [
+    "rasterio",
+    "rasterstats",
+    "geopandas",
+    "pygadm",
+    "typer[all]",
+    "rich",
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "shapely",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+spam-analyze = "src.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
