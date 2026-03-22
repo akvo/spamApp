@@ -464,15 +464,14 @@ with tab2:
         # Choropleth map
         st.subheader("Map")
         try:
+            import branca.colormap as cm
             import folium
             from streamlit_folium import st_folium
 
-            # Load boundary geometries from cache
             name_col = f"NAME_{rank_level}"
             boundary_gdf = _read_cache(country_code, rank_level)
 
             if boundary_gdf is not None and name_col in boundary_gdf.columns:
-                # Merge production data with geometries
                 merge_df = ranking_df[["admin_name", "production_mt"]].copy()
                 map_gdf = boundary_gdf.merge(
                     merge_df,
@@ -482,37 +481,34 @@ with tab2:
                 )
                 map_gdf["production_mt"] = map_gdf["production_mt"].fillna(0)
 
-                # Center map on the data
-                bounds = map_gdf.total_bounds  # [minx, miny, maxx, maxy]
-                center_lat = (bounds[1] + bounds[3]) / 2
-                center_lon = (bounds[0] + bounds[2]) / 2
-
-                m = folium.Map(
-                    location=[center_lat, center_lon],
-                    zoom_start=5,
-                    tiles="cartodbpositron",
+                # Build a simple linear colormap
+                vmin = 0
+                vmax = map_gdf["production_mt"].max()
+                if vmax == 0:
+                    vmax = 1
+                colormap = cm.LinearColormap(
+                    colors=["#f7fcf5", "#74c476", "#005a32"],
+                    vmin=vmin,
+                    vmax=vmax,
                 )
 
-                # Add choropleth
-                folium.Choropleth(
-                    geo_data=map_gdf.__geo_interface__,
-                    data=map_gdf,
-                    columns=[name_col, "production_mt"],
-                    key_on=f"feature.properties.{name_col}",
-                    fill_color="YlGn",
-                    fill_opacity=0.7,
-                    line_opacity=0.3,
-                    legend_name=f"{ranking_crop_name} Production (mt)",
-                    nan_fill_color="white",
-                ).add_to(m)
+                # Style each feature by its production value
+                def style_fn(feature):
+                    val = feature["properties"].get("production_mt", 0)
+                    return {
+                        "fillColor": colormap(val if val else 0),
+                        "fillOpacity": 0.75,
+                        "color": "#333",
+                        "weight": 0.5,
+                    }
 
-                # Add tooltips
+                # Fit to data bounds
+                bounds = map_gdf.total_bounds
+                m = folium.Map(tiles="cartodbpositron")
+
                 folium.GeoJson(
-                    map_gdf,
-                    style_function=lambda x: {
-                        "fillOpacity": 0,
-                        "weight": 0,
-                    },
+                    map_gdf.__geo_interface__,
+                    style_function=style_fn,
                     tooltip=folium.GeoJsonTooltip(
                         fields=[name_col, "production_mt"],
                         aliases=["Region", "Production (mt)"],
@@ -520,9 +516,9 @@ with tab2:
                     ),
                 ).add_to(m)
 
-                # Fit bounds
                 m.fit_bounds(
-                    [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
+                    [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
+                    padding=(20, 20),
                 )
 
                 st_folium(m, use_container_width=True, height=500)
