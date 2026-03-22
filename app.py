@@ -526,18 +526,31 @@ with tab2:
                 )
                 map_gdf["production_mt"] = map_gdf["production_mt"].fillna(0)
 
-                # Build a simple linear colormap
-                vmin = 0
+                # Build colormap
                 vmax = map_gdf["production_mt"].max()
                 if vmax == 0:
                     vmax = 1
                 colormap = cm.LinearColormap(
                     colors=["#f7fcf5", "#74c476", "#005a32"],
-                    vmin=vmin,
+                    vmin=0,
                     vmax=vmax,
+                    caption=f"{ranking_crop_name} Production",
                 )
 
-                # Style each feature by its production value
+                # Human-readable tick labels
+                def _fmt(v):
+                    if v >= 1_000_000:
+                        return f"{v / 1_000_000:.1f}M"
+                    if v >= 1_000:
+                        return f"{v / 1_000:.0f}K"
+                    return f"{v:.0f}"
+
+                colormap.tick_labels = [
+                    _fmt(0),
+                    _fmt(vmax * 0.5),
+                    _fmt(vmax),
+                ]
+
                 def style_fn(feature):
                     val = feature["properties"].get("production_mt", 0)
                     return {
@@ -547,7 +560,6 @@ with tab2:
                         "weight": 0.5,
                     }
 
-                # Fit to data bounds
                 bounds = map_gdf.total_bounds
                 m = folium.Map(tiles="cartodbpositron")
 
@@ -560,6 +572,8 @@ with tab2:
                         localize=True,
                     ),
                 ).add_to(m)
+
+                colormap.add_to(m)
 
                 m.fit_bounds(
                     [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
