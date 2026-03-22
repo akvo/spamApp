@@ -251,31 +251,41 @@ with tab1:
         if "% of Total" in display_df.columns:
             show_cols.append("% of Total")
 
+        # Format numbers as readable strings
+        if is_yield:
+            display_df["value_fmt"] = display_df["value"].apply(
+                lambda v: f"{v:,.2f}"
+            )
+        else:
+            display_df["value_fmt"] = display_df["value"].apply(
+                lambda v: f"{v:,.0f}"
+            )
+
+        fmt_cols = ["crop_name", "category", "value_fmt"]
+        if "% of Total" in display_df.columns:
+            fmt_cols.append("% of Total")
+
         rename_map = {
             "crop_name": "Crop",
             "category": "Category",
-            "value": unit,
+            "value_fmt": unit,
         }
-        styled_df = display_df[show_cols].rename(columns=rename_map)
-
-        col_config = {}
-        if not is_yield:
-            col_config[unit] = st.column_config.NumberColumn(format=",.0f")
-        else:
-            col_config[unit] = st.column_config.NumberColumn(format=",.2f")
 
         st.dataframe(
-            styled_df,
+            display_df[fmt_cols].rename(columns=rename_map),
             use_container_width=True,
             height=400,
-            column_config=col_config,
         )
 
         # Downloads
         dl1, dl2, _ = st.columns([1, 1, 4])
+        csv_cols = ["crop_name", "category", "value"]
+        if "% of Total" in display_df.columns:
+            csv_cols.append("% of Total")
+        csv_rename = {"crop_name": "Crop", "category": "Category", "value": unit}
         csv_data = (
-            display_df[show_cols]
-            .rename(columns=rename_map)
+            display_df[csv_cols]
+            .rename(columns=csv_rename)
             .to_csv(index=False)
         )
         dl1.download_button(
@@ -602,17 +612,13 @@ with tab2:
         show_df = ranking_df[
             ["admin_name", "country_name", "production_mt"]
         ].copy()
+        show_df["production_fmt"] = show_df["production_mt"].apply(
+            lambda v: f"{v:,.0f}"
+        )
+        show_df = show_df[["admin_name", "country_name", "production_fmt"]]
         show_df.index = range(1, len(show_df) + 1)
         show_df.columns = ["Region", "Country", "Production (mt)"]
-        st.dataframe(
-            show_df,
-            use_container_width=True,
-            column_config={
-                "Production (mt)": st.column_config.NumberColumn(
-                    format=",.0f"
-                )
-            },
-        )
+        st.dataframe(show_df, use_container_width=True)
 
         csv_data = show_df.to_csv(index_label="Rank")
         st.download_button(
