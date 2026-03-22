@@ -43,16 +43,17 @@ def compute_zonal_sum(raster_path: str, geometry: Geometry) -> float:
     try:
         with rasterio.open(raster_path) as src:
             out_image, _ = rasterio_mask(
-                src, [geometry], crop=True, nodata=src.nodata, all_touched=True
+                src, [geometry], crop=True, nodata=src.nodata, all_touched=False
             )
             nodata = src.nodata
 
         data = out_image[0]  # single band
 
-        if nodata is not None:
-            valid = data[data != nodata]
-        else:
-            valid = data[~np.isnan(data)]
+        # Exclude nodata and NaN pixels
+        valid_mask = ~np.isnan(data)
+        if nodata is not None and not np.isnan(nodata):
+            valid_mask &= data != nodata
+        valid = data[valid_mask]
 
         # Exclude negative values (common nodata sentinel in SPAM data)
         valid = valid[valid >= 0]
