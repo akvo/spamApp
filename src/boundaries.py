@@ -96,7 +96,16 @@ def _resolve_country_code(location: str) -> str:
     if name_df.empty:
         raise ValueError(f"Location '{location}' not found in GADM database.")
 
-    return name_df.iloc[0]["GID_0"]
+    # pygadm returns different GID columns depending on match level
+    # e.g., GID_0 for countries, GID_1 for states ("IND.36_1")
+    # Extract the ISO3 country code from whichever GID column exists
+    row = name_df.iloc[0]
+    for col in ["GID_0", "GID_1", "GID_2"]:
+        if col in row.index:
+            # GID format: "IND" or "IND.36_1" or "IND.36.5_2" — first 3 chars are ISO3
+            return str(row[col])[:3]
+
+    raise ValueError(f"Could not determine country code for '{location}'")
 
 
 def _fetch_gadm(country_code: str, admin_level: int) -> gpd.GeoDataFrame:
