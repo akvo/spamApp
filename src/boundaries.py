@@ -120,7 +120,11 @@ def _fetch_gadm(country_code: str, admin_level: int) -> gpd.GeoDataFrame:
 
 
 def _gadm_to_standard(gdf: gpd.GeoDataFrame, admin_level: int) -> gpd.GeoDataFrame:
-    """Convert a GADM GeoDataFrame to the standard boundary schema."""
+    """Convert a GADM GeoDataFrame to the standard boundary schema.
+
+    At level 0, dissolves all polygons for the same country into one
+    (GADM splits disputed territories into separate rows).
+    """
     # GADM level 0 uses COUNTRY column, higher levels use NAME_N
     if admin_level == 0:
         name_col = "COUNTRY" if "COUNTRY" in gdf.columns else "NAME_0"
@@ -129,17 +133,41 @@ def _gadm_to_standard(gdf: gpd.GeoDataFrame, admin_level: int) -> gpd.GeoDataFra
 
     code_col = f"GID_{admin_level}" if f"GID_{admin_level}" in gdf.columns else "GID_0"
 
-    # Determine parent name
-    if admin_level > 0:
-        parent_col = f"NAME_{admin_level - 1}"
-        if parent_col not in gdf.columns:
-            parent_col = "COUNTRY" if "COUNTRY" in gdf.columns else None
-    else:
-        parent_col = None
-
     # Country info
-    country_code_col = "GID_0"
     country_name_col = "COUNTRY" if "COUNTRY" in gdf.columns else "NAME_0"
+
+    # At level 0, dissolve all polygons per country into one
+    if admin_level == 0:
+        # Group by country name and dissolve geometries
+        dissolved = gdf.dissolve(by=country_name_col).reset_index()
+        # Use the primary GID (shortest, e.g. "IND" not "Z01")
+        primary_codes = gdf.groupby(country_name_col)["GID_0"].first().reset_index()
+        dissolved = dissolved.merge(
+            primary_codes, on=country_name_col, how="left", suffixes=("_drop", "")
+        )
+        if "GID_0_drop" in dissolved.columns:
+            dissolved = dissolved.drop(columns=["GID_0_drop"])
+
+        result = gpd.GeoDataFrame(
+            {
+                "admin_name": dissolved[country_name_col].values,
+                "admin_code": dissolved["GID_0"].str[:3].values,
+                "admin_level": admin_level,
+                "country_code": dissolved["GID_0"].str[:3].values,
+                "country_name": dissolved[country_name_col].values,
+                "parent_name": None,
+                "geometry": dissolved.geometry.values,
+            },
+            crs="EPSG:4326",
+        )
+        return result
+
+    # Determine parent name for levels > 0
+    parent_col = f"NAME_{admin_level - 1}"
+    if parent_col not in gdf.columns:
+        parent_col = "COUNTRY" if "COUNTRY" in gdf.columns else None
+
+    country_code_col = "GID_0"
 
     result = gpd.GeoDataFrame(
         {
