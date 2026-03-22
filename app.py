@@ -485,7 +485,39 @@ with tab2:
             boundary_gdf = _read_cache(country_code, rank_level)
 
             if boundary_gdf is not None and name_col in boundary_gdf.columns:
-                merge_df = ranking_df[["admin_name", "production_mt"]].copy()
+                # Filter boundaries to children of selected region
+                if rank_level == 1:
+                    # Showing states — use all states in country
+                    pass
+                elif rank_level == 2 and state_name != "(All)":
+                    # Showing districts — filter to selected state
+                    boundary_gdf = boundary_gdf[
+                        boundary_gdf["NAME_1"] == state_name
+                    ].copy()
+
+                # Get ALL production data for these regions (not just top N)
+                try:
+                    all_ranked = rank_by_crop(
+                        crop_code,
+                        admin_level=rank_level,
+                        index_dir=INDEX_DIR,
+                        top_n=9999,
+                        country_code=country_code,
+                    )
+                    # Filter to state's districts if needed
+                    if rank_level == 2 and state_name != "(All)":
+                        state_districts = set(boundary_gdf[name_col])
+                        all_ranked = all_ranked[
+                            all_ranked["admin_name"].isin(state_districts)
+                        ]
+                    merge_df = all_ranked[
+                        ["admin_name", "production_mt"]
+                    ].copy()
+                except Exception:
+                    merge_df = ranking_df[
+                        ["admin_name", "production_mt"]
+                    ].copy()
+
                 map_gdf = boundary_gdf.merge(
                     merge_df,
                     left_on=name_col,
