@@ -263,6 +263,19 @@ def build_index_parallel(
     temp_dir = output_dir / "_temp"
     temp_dir.mkdir(exist_ok=True)
 
+    # Seed temp dirs with existing data so incremental skip works
+    main_index = output_dir / f"level_{admin_level}.parquet"
+    if main_index.exists():
+        existing_df = pd.read_parquet(main_index)
+        for cc in country_codes:
+            cc_data = existing_df[existing_df["country_code"] == cc]
+            if not cc_data.empty:
+                cc_dir = temp_dir / cc
+                cc_dir.mkdir(parents=True, exist_ok=True)
+                cc_data.to_parquet(
+                    cc_dir / f"level_{admin_level}.parquet", index=False
+                )
+
     args_list = [
         (data_dir, admin_level, temp_dir, year, crops, cc, variables)
         for cc in country_codes
