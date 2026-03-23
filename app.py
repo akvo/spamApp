@@ -32,7 +32,7 @@ def _cached_analyze(location, admin_level, variable, year=2020):
 
 
 @st.cache_data(show_spinner=False)
-def _cached_rank(crop_code, admin_level, top_n, country_code=None):
+def _cached_rank(crop_code, admin_level, top_n, country_code=None, variable="P"):
     """Cache ranking results."""
     return rank_by_crop(
         crop_code,
@@ -40,6 +40,7 @@ def _cached_rank(crop_code, admin_level, top_n, country_code=None):
         index_dir=INDEX_DIR,
         top_n=top_n,
         country_code=country_code,
+        variable=variable,
     )
 
 
@@ -151,6 +152,15 @@ else:
 # The ranking level is always one below the selected level (child breakdown)
 # Unless we're at the deepest level — then we rank among siblings
 rank_level = min(selected_level + 1, 2) if not is_deepest else selected_level
+
+# Map variable name to code for index queries
+_VAR_NAME_TO_CODE = {
+    "production": "P",
+    "harvested_area": "H",
+    "physical_area": "A",
+    "yield": "Y",
+}
+var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 
 # --- Header ---
@@ -392,7 +402,7 @@ with tab2:
     if rank_btn:
         try:
             df = _cached_rank(
-                crop_code, rank_level, top_n, country_code
+                crop_code, rank_level, top_n, country_code, var_code
             )
             # If a state is selected, filter districts to that state
             # by looking up which districts belong to it from GADM cache
@@ -457,6 +467,14 @@ with tab2:
     else:
         st.markdown("---")
 
+        # Determine unit label for the selected variable
+        var_info = VARIABLES.get(var_code, {})
+        rank_unit = var_info.get("unit", "mt")
+        rank_var_name = var_info.get("name", "Production")
+        is_rank_yield = var_code == "Y"
+        rank_fmt = ",.2f" if is_rank_yield else ",.0f"
+        rank_col_label = f"{rank_var_name} ({rank_unit})"
+
         # Header
         h1, h2, h3 = st.columns(3)
         h1.metric("Crop", ranking_crop_name)
@@ -469,7 +487,6 @@ with tab2:
         st.subheader(ranking_title)
 
         if highlight:
-            # Add a color column to highlight the selected region
             ranking_df = ranking_df.copy()
             ranking_df["_highlight"] = ranking_df["admin_name"].apply(
                 lambda x: "Selected" if x == highlight else "Other"
@@ -478,7 +495,7 @@ with tab2:
                 alt.Chart(ranking_df)
                 .mark_bar(cornerRadiusEnd=4)
                 .encode(
-                    x=alt.X("production_mt:Q", title="Production (mt)"),
+                    x=alt.X("rank_value:Q", title=rank_col_label),
                     y=alt.Y("admin_name:N", sort="-x", title=""),
                     color=alt.Color(
                         "_highlight:N",
@@ -492,9 +509,9 @@ with tab2:
                         alt.Tooltip("admin_name:N", title="Region"),
                         alt.Tooltip("country_name:N", title="Country"),
                         alt.Tooltip(
-                            "production_mt:Q",
-                            title="Production (mt)",
-                            format=",.0f",
+                            "rank_value:Q",
+                            title=rank_col_label,
+                            format=rank_fmt,
                         ),
                     ],
                 )
@@ -505,15 +522,15 @@ with tab2:
                 alt.Chart(ranking_df)
                 .mark_bar(cornerRadiusEnd=4, color="#2e8b2e")
                 .encode(
-                    x=alt.X("production_mt:Q", title="Production (mt)"),
+                    x=alt.X("rank_value:Q", title=rank_col_label),
                     y=alt.Y("admin_name:N", sort="-x", title=""),
                     tooltip=[
                         alt.Tooltip("admin_name:N", title="Region"),
                         alt.Tooltip("country_name:N", title="Country"),
                         alt.Tooltip(
-                            "production_mt:Q",
-                            title="Production (mt)",
-                            format=",.0f",
+                            "rank_value:Q",
+                            title=rank_col_label,
+                            format=rank_fmt,
                         ),
                     ],
                 )
@@ -542,23 +559,22 @@ with tab2:
                         boundary_gdf["NAME_1"] == state_name
                     ].copy()
 
-                # Get ALL production data for these regions (not just top N)
+                # Get ALL data for these regions (not just top N)
                 try:
                     all_ranked = _cached_rank(
-                        crop_code, rank_level, 9999, country_code
+                        crop_code, rank_level, 9999, country_code, var_code
                     )
-                    # Filter to state's districts if needed
                     if rank_level == 2 and state_name != "(All)":
                         state_districts = set(boundary_gdf[name_col])
                         all_ranked = all_ranked[
                             all_ranked["admin_name"].isin(state_districts)
                         ]
                     merge_df = all_ranked[
-                        ["admin_name", "production_mt"]
+                        ["admin_name", "rank_value"]
                     ].copy()
                 except Exception:
                     merge_df = ranking_df[
-                        ["admin_name", "production_mt"]
+                        ["admin_name", "rank_value"]
                     ].copy()
 
                 map_gdf = boundary_gdf.merge(
@@ -567,23 +583,40 @@ with tab2:
                     right_on="admin_name",
                     how="left",
                 )
-                map_gdf["production_mt"] = map_gdf["production_mt"].fillna(0)
+                map_gdf["rank_value"] = map_gdf["rank_value"].fillna(0)
 
-                vmax = map_gdf["production_mt"].max()
-                if vmax == 0:
-                    vmax = 1
+                import numpy as np
 
-                # Internal colormap for styling only (not added to map)
-                colormap = cm.LinearColormap(
-                    colors=["#f7fcf5", "#74c476", "#005a32"],
-                    vmin=0,
-                    vmax=vmax,
-                )
+                # Use quantile-based coloring to handle skewed distributions
+                values = map_gdf["rank_value"]
+                nonzero = values[values > 0]
+                if len(nonzero) > 2:
+                    # Quantile thresholds for better color spread
+                    q33 = float(np.percentile(nonzero, 33))
+                    q66 = float(np.percentile(nonzero, 66))
+                    vmax = float(nonzero.max())
+
+                    def _color_for(v):
+                        if v <= 0:
+                            return "#f7fcf5"
+                        if v <= q33:
+                            return "#c7e9c0"
+                        if v <= q66:
+                            return "#74c476"
+                        return "#005a32"
+                else:
+                    vmax = float(values.max()) if values.max() > 0 else 1
+                    colormap = cm.LinearColormap(
+                        colors=["#f7fcf5", "#74c476", "#005a32"],
+                        vmin=0,
+                        vmax=vmax,
+                    )
+                    _color_for = lambda v: colormap(v if v else 0)  # noqa: E731
 
                 def style_fn(feature):
-                    val = feature["properties"].get("production_mt", 0)
+                    val = feature["properties"].get("rank_value", 0)
                     return {
-                        "fillColor": colormap(val if val else 0),
+                        "fillColor": _color_for(val),
                         "fillOpacity": 0.75,
                         "color": "#333",
                         "weight": 0.5,
@@ -596,14 +629,16 @@ with tab2:
                     map_gdf.__geo_interface__,
                     style_function=style_fn,
                     tooltip=folium.GeoJsonTooltip(
-                        fields=[name_col, "production_mt"],
-                        aliases=["Region", "Production (mt)"],
+                        fields=[name_col, "rank_value"],
+                        aliases=["Region", rank_col_label],
                         localize=True,
                     ),
                 ).add_to(m)
 
                 # Clean HTML legend
                 def _fmt(v):
+                    if is_rank_yield:
+                        return f"{v:.1f}"
                     if v >= 1_000_000:
                         return f"{v / 1_000_000:.1f}M"
                     if v >= 1_000:
@@ -616,13 +651,13 @@ with tab2:
                      box-shadow:0 1px 4px rgba(0,0,0,0.2); font-size:12px;
                      font-family:sans-serif;">
                   <div style="margin-bottom:4px; font-weight:600;">
-                    {ranking_crop_name} Production (mt)
+                    {ranking_crop_name} {rank_var_name} ({rank_unit})
                   </div>
                   <div style="display:flex; align-items:center; gap:6px;">
                     <span>{_fmt(0)}</span>
                     <div style="width:120px; height:12px; border-radius:3px;
                          background:linear-gradient(to right,
-                         #f7fcf5, #74c476, #005a32);"></div>
+                         #f7fcf5, #c7e9c0, #74c476, #005a32);"></div>
                     <span>{_fmt(vmax)}</span>
                   </div>
                 </div>
@@ -643,14 +678,19 @@ with tab2:
         # Table
         st.subheader("Rankings Data")
         show_df = ranking_df[
-            ["admin_name", "country_name", "production_mt"]
+            ["admin_name", "country_name", "rank_value"]
         ].copy()
-        show_df["production_fmt"] = show_df["production_mt"].apply(
-            lambda v: f"{v:,.0f}"
-        )
-        show_df = show_df[["admin_name", "country_name", "production_fmt"]]
+        if is_rank_yield:
+            show_df["value_fmt"] = show_df["rank_value"].apply(
+                lambda v: f"{v:,.2f}"
+            )
+        else:
+            show_df["value_fmt"] = show_df["rank_value"].apply(
+                lambda v: f"{v:,.0f}"
+            )
+        show_df = show_df[["admin_name", "country_name", "value_fmt"]]
         show_df.index = range(1, len(show_df) + 1)
-        show_df.columns = ["Region", "Country", "Production (mt)"]
+        show_df.columns = ["Region", "Country", rank_col_label]
         st.dataframe(show_df, use_container_width=True)
 
         csv_data = show_df.to_csv(index_label="Rank")

@@ -238,15 +238,16 @@ def rank_by_crop(
     top_n: int = 10,
     country_code: str | None = None,
     parent_name: str | None = None,
+    variable: str = "P",
 ) -> pd.DataFrame:
     """Top N regions for a crop from pre-built parquet index.
 
     Args:
         country_code: Filter to this country only.
-        parent_name: Filter to children of this parent region
-            (e.g., districts within a specific state).
+        parent_name: Filter to children of this parent region.
+        variable: Variable code to rank by (P, H, A, Y). Default: P.
 
-    Returns DataFrame sorted descending by production_mt.
+    Returns DataFrame sorted descending by value, with a 'rank_value' column.
     """
     index_dir = Path(index_dir)
     index_path = index_dir / f"level_{admin_level}.parquet"
@@ -260,11 +261,25 @@ def rank_by_crop(
     df = pd.read_parquet(index_path)
     crop_df = df[df["crop_code"] == crop_code].copy()
 
+    # Filter by variable if the column exists
+    if "variable" in crop_df.columns:
+        crop_df = crop_df[crop_df["variable"] == variable]
+
     if country_code:
         crop_df = crop_df[crop_df["country_code"] == country_code]
 
     if parent_name and "parent_name" in crop_df.columns:
         crop_df = crop_df[crop_df["parent_name"] == parent_name]
 
-    crop_df = crop_df.sort_values("production_mt", ascending=False)
+    # Use 'value' column if available, fall back to 'production_mt'
+    if "value" in crop_df.columns:
+        crop_df["rank_value"] = crop_df["value"]
+    else:
+        crop_df["rank_value"] = crop_df["production_mt"]
+
+    # Also ensure production_mt exists for backward compat
+    if "production_mt" not in crop_df.columns:
+        crop_df["production_mt"] = crop_df["rank_value"]
+
+    crop_df = crop_df.sort_values("rank_value", ascending=False)
     return crop_df.head(top_n).reset_index(drop=True)
