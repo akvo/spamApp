@@ -529,6 +529,14 @@ with tab2:
     else:
         st.markdown("---")
 
+        # Ensure rank_value column exists (backward compat with cached data)
+        if "rank_value" not in ranking_df.columns:
+            ranking_df = ranking_df.copy()
+            if "production_mt" in ranking_df.columns:
+                ranking_df["rank_value"] = ranking_df["production_mt"]
+            elif "value" in ranking_df.columns:
+                ranking_df["rank_value"] = ranking_df["value"]
+
         # Determine unit label for the selected variable
         var_info = VARIABLES.get(var_code, {})
         rank_unit = var_info.get("unit", "mt")
@@ -739,15 +747,16 @@ with tab2:
 
         # Table
         st.subheader("Rankings Data")
+        val_col = "rank_value" if "rank_value" in ranking_df.columns else "production_mt"
         show_df = ranking_df[
-            ["admin_name", "country_name", "rank_value"]
+            ["admin_name", "country_name", val_col]
         ].copy()
         if is_rank_yield:
-            show_df["value_fmt"] = show_df["rank_value"].apply(
+            show_df["value_fmt"] = show_df[val_col].apply(
                 lambda v: f"{v:,.2f}"
             )
         else:
-            show_df["value_fmt"] = show_df["rank_value"].apply(
+            show_df["value_fmt"] = show_df[val_col].apply(
                 lambda v: f"{v:,.0f}"
             )
         show_df = show_df[["admin_name", "country_name", "value_fmt"]]
