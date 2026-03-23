@@ -78,12 +78,11 @@ st.markdown(
     [data-testid="stSidebar"] {
         background-color: #1a3a1a;
     }
-    [data-testid="stSidebar"] * {
-        color: #e8f0e8 !important;
-    }
-    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stMarkdown,
     [data-testid="stSidebar"] .stMarkdown h2,
-    [data-testid="stSidebar"] .stMarkdown p {
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] .stMarkdown span,
+    [data-testid="stSidebar"] label {
         color: #e8f0e8 !important;
     }
     [data-testid="stSidebar"] hr {
