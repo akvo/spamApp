@@ -18,8 +18,12 @@ from src.crops import CROPS, VARIABLES
 
 
 # --- Cached wrappers for performance ---
+# Bump _CACHE_VERSION when the analysis output format changes to invalidate stale cache
+_CACHE_VERSION = 2
+
+
 @st.cache_data(show_spinner=False)
-def _cached_analyze(location, admin_level, variable, year=2020):
+def _cached_analyze(location, admin_level, variable, year=2020, _v=_CACHE_VERSION):
     """Cache analysis results — same inputs return instantly."""
     return analyze_location(
         location=location,
