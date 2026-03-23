@@ -102,35 +102,87 @@ def crops() -> None:
 
 @app.command(name="build-index")
 def build_index_cmd(
-    level: Annotated[int, typer.Option("--level", "-l", help="Admin level to index")] = 0,
+    level: Annotated[
+        int, typer.Option("--level", "-l", help="Admin level to index")
+    ] = 0,
     crop: Annotated[
-        Optional[list[str]], typer.Option("--crop", "-c", help="Specific crop code(s)")
+        Optional[list[str]],
+        typer.Option("--crop", "-c", help="Specific crop code(s)"),
     ] = None,
-    country: Annotated[Optional[str], typer.Option("--country", help="ISO country code")] = None,
-    year: Annotated[int, typer.Option("--year", "-y", help="Data year")] = 2020,
-    data_dir: Annotated[str, typer.Option("--data", help="Path to data directory")] = "data",
+    country: Annotated[
+        Optional[list[str]],
+        typer.Option("--country", help="ISO country code(s)"),
+    ] = None,
+    year: Annotated[
+        int, typer.Option("--year", "-y", help="Data year")
+    ] = 2020,
+    data_dir: Annotated[
+        str, typer.Option("--data", help="Path to data directory")
+    ] = "data",
     output_dir: Annotated[
         str, typer.Option("--output", "-o", help="Index output directory")
     ] = "data/index",
+    parallel: Annotated[
+        int, typer.Option("--parallel", "-j", help="Parallel workers (0=sequential)")
+    ] = 0,
 ) -> None:
-    """Build the global production index (run once per admin level)."""
-    from src.index import build_index
+    """Build the production index. Use --parallel for multi-country runs."""
+    import time
 
-    console.print(f"Building index for admin level {level}...")
+    crops_list = [c.upper() for c in crop] if crop else None
+    start = time.time()
 
-    try:
-        result_path = build_index(
-            data_dir=Path(data_dir),
-            admin_level=level,
-            output_dir=Path(output_dir),
-            year=year,
-            crops=[c.upper() for c in crop] if crop else None,
-            country_code=country,
+    if parallel > 0 and (country is None or len(country) > 1):
+        from src.index import build_index_parallel
+
+        codes = [c.upper() for c in country] if country else None
+        console.print(
+            f"Building index level {level} "
+            f"with {parallel} workers..."
         )
-        console.print(f"[green]Index built:[/green] {result_path}")
-    except (ValueError, FileNotFoundError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        try:
+            result_path = build_index_parallel(
+                data_dir=Path(data_dir),
+                admin_level=level,
+                output_dir=Path(output_dir),
+                year=year,
+                crops=crops_list,
+                country_codes=codes,
+                max_workers=parallel,
+            )
+            elapsed = time.time() - start
+            console.print(
+                f"[green]Index built:[/green] {result_path} "
+                f"({elapsed:.0f}s)"
+            )
+        except (ValueError, FileNotFoundError) as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+    else:
+        from src.index import build_index
+
+        cc = country[0].upper() if country else None
+        console.print(
+            f"Building index level {level}"
+            f"{f' for {cc}' if cc else ''}..."
+        )
+        try:
+            result_path = build_index(
+                data_dir=Path(data_dir),
+                admin_level=level,
+                output_dir=Path(output_dir),
+                year=year,
+                crops=crops_list,
+                country_code=cc,
+            )
+            elapsed = time.time() - start
+            console.print(
+                f"[green]Index built:[/green] {result_path} "
+                f"({elapsed:.0f}s)"
+            )
+        except (ValueError, FileNotFoundError) as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 @app.command(name="prep-boundary")

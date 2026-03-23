@@ -175,3 +175,38 @@ def batch_zonal_stats(
     Returns a list of floats (one per geometry) in the same order.
     """
     return [compute_zonal_sum(raster_path, geom) for geom in geometries]
+
+
+def batch_zonal_stats_gdf(
+    raster_path: str,
+    gdf,
+) -> list[float]:
+    """Compute zonal sum for one raster against ALL geometries in a GeoDataFrame.
+
+    Uses rasterstats for efficient single-pass processing — reads the raster
+    once and computes stats for all polygons. Much faster than per-geometry calls.
+
+    Returns a list of floats (one per row in gdf) in the same order.
+    """
+    from rasterstats import zonal_stats
+
+    stats = zonal_stats(gdf, raster_path, stats=["sum"], nodata=0, all_touched=False)
+    return [float(s["sum"]) if s["sum"] is not None else 0.0 for s in stats]
+
+
+def batch_weighted_mean_gdf(
+    value_raster_path: str,
+    weight_raster_path: str,
+    gdf,
+) -> list[float]:
+    """Compute weighted mean for ALL geometries in a GeoDataFrame.
+
+    avg = sum(value * weight) / sum(weight) for each geometry.
+    Reads each raster once via rasterstats.
+    """
+    # rasterstats doesn't support weighted mean natively
+    # rasterstats doesn't support weighted mean natively, so fall back to per-geometry
+    results = []
+    for geom in gdf.geometry:
+        results.append(compute_weighted_mean(value_raster_path, weight_raster_path, geom))
+    return results

@@ -3,13 +3,19 @@
 Only writes to data/index/. Never modifies source data (see CONTRACTS.md).
 """
 
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
 
-from src.boundaries import get_all_boundaries
+from src.boundaries import get_all_boundaries, get_cached_country_names
 from src.crops import CROPS, VARIABLES
-from src.raster import compute_weighted_mean, compute_zonal_sum, get_vsi_path
+from src.raster import (
+    batch_weighted_mean_gdf,
+    batch_zonal_stats_gdf,
+    get_vsi_path,
+)
 
 # Variable code → ZIP filename component
 _VAR_ZIP_MAP = {
@@ -42,13 +48,8 @@ def build_index(
 ) -> Path:
     """Build or update the parquet index for a given admin level.
 
-    Processes "A" (all systems) tech level for specified variables.
-    For yield, computes weighted average using harvested area.
+    Uses batch zonal stats — reads each raster once for ALL boundaries.
     Supports incremental builds — skips already-indexed combos.
-
-    Args:
-        variables: Variable codes to index (e.g., ["P", "H", "Y"]).
-            Default: all 4 (P, H, A, Y).
 
     Returns path to the output parquet file.
     """
@@ -62,10 +63,16 @@ def build_index(
     existing_keys = set()
     if output_path.exists():
         existing_df = pd.read_parquet(output_path)
-        key_cols = ["admin_code", "crop_code"]
         if "variable" in existing_df.columns:
-            key_cols.append("variable")
-        existing_keys = set(existing_df[key_cols].itertuples(index=False))
+            existing_keys = set(
+                existing_df[["admin_code", "crop_code", "variable"]].itertuples(
+                    index=False
+                )
+            )
+        else:
+            existing_keys = set(
+                existing_df[["admin_code", "crop_code"]].itertuples(index=False)
+            )
 
     # Determine what to process
     crop_codes = crops if crops else list(CROPS.keys())
@@ -76,6 +83,9 @@ def build_index(
         admin_level, country_code=country_code, custom_dir=custom_boundary_dir
     )
 
+    if boundaries_gdf.empty:
+        return output_path
+
     # Pre-locate ZIPs
     zip_paths = {}
     for vc in var_codes:
@@ -84,7 +94,6 @@ def build_index(
         except FileNotFoundError:
             continue
 
-    # Need harvested area ZIP for yield weighting
     ha_zip = None
     if "Y" in var_codes:
         try:
@@ -93,6 +102,7 @@ def build_index(
             pass
 
     new_rows = []
+
     for crop_code in crop_codes:
         if crop_code not in CROPS:
             continue
@@ -105,40 +115,31 @@ def build_index(
             var_info = VARIABLES[var_code]
             zip_path = zip_paths[var_code]
 
+            # Check if ALL boundaries for this crop/var are already indexed
+            sample_key = (boundaries_gdf.iloc[0]["admin_code"], crop_code, var_code)
+            if sample_key in existing_keys:
+                continue
+
             try:
                 vsi_path = get_vsi_path(zip_path, var_code, crop_code, "A")
             except FileNotFoundError:
                 continue
 
-            # For yield, also need harvested area path
-            ha_vsi = None
+            # Batch compute: one raster read for ALL boundaries
             if var_code == "Y" and ha_zip:
                 try:
                     ha_vsi = get_vsi_path(ha_zip, "H", crop_code, "A")
                 except FileNotFoundError:
                     continue
+                values = batch_weighted_mean_gdf(vsi_path, ha_vsi, boundaries_gdf)
+            else:
+                values = batch_zonal_stats_gdf(vsi_path, boundaries_gdf)
 
-            for _, boundary in boundaries_gdf.iterrows():
-                admin_code = boundary["admin_code"]
-
-                # Skip if already indexed
-                key = (admin_code, crop_code, var_code)
-                old_key = (admin_code, crop_code)
-                if key in existing_keys or old_key in existing_keys:
-                    continue
-
-                # Compute value
-                if var_code == "Y" and ha_vsi:
-                    value = compute_weighted_mean(
-                        vsi_path, ha_vsi, boundary.geometry
-                    )
-                else:
-                    value = compute_zonal_sum(vsi_path, boundary.geometry)
-
+            for i, (_, boundary) in enumerate(boundaries_gdf.iterrows()):
                 new_rows.append(
                     {
                         "admin_name": boundary["admin_name"],
-                        "admin_code": admin_code,
+                        "admin_code": boundary["admin_code"],
                         "admin_level": admin_level,
                         "country_code": boundary["country_code"],
                         "country_name": boundary["country_name"],
@@ -148,16 +149,14 @@ def build_index(
                         "variable": var_code,
                         "variable_name": var_info["name"],
                         "unit": var_info["unit"],
-                        "value": value,
-                        # Keep backward compat column
-                        "production_mt": value if var_code == "P" else 0,
+                        "value": values[i],
+                        "production_mt": values[i] if var_code == "P" else 0,
                     }
                 )
 
     # Combine with existing data
     new_df = pd.DataFrame(new_rows)
     if existing_df is not None and not new_df.empty:
-        # Add missing columns to old data for backward compat
         if "variable" not in existing_df.columns:
             existing_df["variable"] = "P"
             existing_df["variable_name"] = "Production"
@@ -169,5 +168,104 @@ def build_index(
     else:
         combined = new_df
 
-    combined.to_parquet(output_path, index=False)
+    if not combined.empty:
+        combined.to_parquet(output_path, index=False)
+    return output_path
+
+
+def _build_single_country(args):
+    """Worker function for parallel index building."""
+    data_dir, admin_level, output_dir, year, crops, country_code, variables = args
+    temp_dir = output_dir
+
+    # Build into a temp output dir to avoid conflicts
+    result = build_index(
+        data_dir=data_dir,
+        admin_level=admin_level,
+        output_dir=temp_dir,
+        year=year,
+        crops=crops,
+        country_code=country_code,
+        variables=variables,
+    )
+    return country_code, result
+
+
+def build_index_parallel(
+    data_dir: Path,
+    admin_level: int,
+    output_dir: Path = Path("data/index"),
+    year: int = 2020,
+    crops: list[str] | None = None,
+    country_codes: list[str] | None = None,
+    variables: list[str] | None = None,
+    max_workers: int | None = None,
+) -> Path:
+    """Build index for multiple countries in parallel.
+
+    Each country is processed independently in a separate process.
+    Results are merged into a single parquet file.
+    """
+    data_dir = Path(data_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if country_codes is None:
+        # Use all cached countries
+        countries = get_cached_country_names()
+        country_codes = list(countries.values())
+
+    if max_workers is None:
+        max_workers = max(1, os.cpu_count() - 1)
+
+    # Each country builds to a temp file, then we merge
+    temp_dir = output_dir / "_temp"
+    temp_dir.mkdir(exist_ok=True)
+
+    args_list = [
+        (data_dir, admin_level, temp_dir, year, crops, cc, variables)
+        for cc in country_codes
+    ]
+
+    completed = []
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_build_single_country, args): args[5]
+            for args in args_list
+        }
+        for future in as_completed(futures):
+            cc = futures[future]
+            try:
+                country_code, result_path = future.result()
+                completed.append((country_code, result_path))
+                print(f"  Done: {country_code}")
+            except Exception as e:
+                print(f"  Failed: {cc}: {e}")
+
+    # Merge all temp files + existing index
+    output_path = output_dir / f"level_{admin_level}.parquet"
+    dfs = []
+
+    # Keep existing data for countries NOT in this run
+    if output_path.exists():
+        existing = pd.read_parquet(output_path)
+        processed_codes = set(country_codes)
+        keep = existing[~existing["country_code"].isin(processed_codes)]
+        if not keep.empty:
+            dfs.append(keep)
+
+    # Add new results from temp files
+    temp_file = temp_dir / f"level_{admin_level}.parquet"
+    if temp_file.exists():
+        dfs.append(pd.read_parquet(temp_file))
+
+    if dfs:
+        combined = pd.concat(dfs, ignore_index=True)
+        combined.to_parquet(output_path, index=False)
+
+    # Clean up temp
+    import shutil
+
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
     return output_path
