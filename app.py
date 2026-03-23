@@ -70,6 +70,68 @@ st.set_page_config(
     layout="wide",
 )
 
+# --- Custom theme CSS ---
+st.markdown(
+    """
+    <style>
+    /* Sidebar: dark green background */
+    [data-testid="stSidebar"] {
+        background-color: #1a3a1a;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e8f0e8 !important;
+    }
+    [data-testid="stSidebar"] .stSelectbox label,
+    [data-testid="stSidebar"] .stMarkdown h2,
+    [data-testid="stSidebar"] .stMarkdown p {
+        color: #e8f0e8 !important;
+    }
+    [data-testid="stSidebar"] hr {
+        border-color: #2a5a2a;
+    }
+
+    /* Primary button: green */
+    .stButton > button[kind="primary"] {
+        background-color: #2e8b2e;
+        border-color: #2e8b2e;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #3aa53a;
+        border-color: #3aa53a;
+    }
+
+    /* Tab underline: green */
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: #2e8b2e;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: #1a6a1a;
+    }
+
+    /* Metric cards: light green background */
+    [data-testid="stMetric"] {
+        background: #f0f8f0;
+        padding: 12px 16px;
+        border-radius: 8px;
+    }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        color: #1a6a1a;
+    }
+
+    /* Page background */
+    .stApp {
+        background-color: #f8faf8;
+    }
+
+    /* Title color */
+    .stApp h1 {
+        color: #1a3a1a;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # --- Constants ---
 DATA_DIR = Path("data")
 INDEX_DIR = DATA_DIR / "index"
