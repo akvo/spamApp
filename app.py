@@ -258,6 +258,12 @@ with tab1:
         var_info = VARIABLES.get(result.variable[0].upper(), {})
         unit = var_info.get("unit", "")
 
+        # Split data by tech level
+        all_data = result.crop_data
+        a_data = all_data[all_data["tech_level"] == "A"]
+        ir_data = all_data[all_data["tech_level"].isin(["I", "R"])]
+        has_ir = len(ir_data) > 0 and not is_yield
+
         # Header metrics
         level_label = {0: "Country", 1: "State", 2: "District"}[
             result.admin_level
@@ -265,7 +271,7 @@ with tab1:
         m1, m2, m3 = st.columns(3)
         m1.metric("Location", f"{result.location_name} ({level_label})")
         m2.metric("Variable", result.variable.replace("_", " ").title())
-        nonzero_count = len(result.crop_data[result.crop_data["value"] > 0])
+        nonzero_count = len(a_data[a_data["value"] > 0])
         m3.metric("Crops with Data", nonzero_count)
 
         st.markdown("---")
@@ -274,8 +280,10 @@ with tab1:
         chart_col, cat_col = st.columns([3, 2])
 
         with chart_col:
-            top_n_display = min(10, len(result.crop_data))
-            chart_df = result.crop_data.nlargest(top_n_display, "value").copy()
+            top_n_display = min(10, len(a_data))
+            top_crops_list = (
+                a_data.nlargest(top_n_display, "value")["crop_name"].tolist()
+            )
 
             if is_yield:
                 st.subheader(f"Top {top_n_display} Crops — Avg Yield ({unit})")
@@ -286,26 +294,78 @@ with tab1:
                 )
 
             fmt = ",.2f" if is_yield else ",.0f"
-            chart = (
-                alt.Chart(chart_df)
-                .mark_bar(cornerRadiusEnd=4, color="#2e8b2e")
-                .encode(
-                    x=alt.X("value:Q", title=unit),
-                    y=alt.Y("crop_name:N", sort="-x", title=""),
-                    tooltip=[
-                        alt.Tooltip("crop_name:N", title="Crop"),
-                        alt.Tooltip("value:Q", title=unit, format=fmt),
-                        alt.Tooltip("category:N", title="Category"),
-                    ],
+
+            if has_ir:
+                # Stacked bar: Irrigated + Rainfed
+                stack_df = ir_data[
+                    ir_data["crop_name"].isin(top_crops_list)
+                ].copy()
+                stack_df["tech_label"] = stack_df["tech_level"].map(
+                    {"I": "Irrigated", "R": "Rainfed"}
                 )
-                .properties(height=max(300, top_n_display * 35))
-            )
+                chart = (
+                    alt.Chart(stack_df)
+                    .mark_bar(cornerRadiusEnd=2)
+                    .encode(
+                        x=alt.X(
+                            "value:Q", title=unit, stack="zero"
+                        ),
+                        y=alt.Y(
+                            "crop_name:N",
+                            sort=top_crops_list,
+                            title="",
+                        ),
+                        color=alt.Color(
+                            "tech_label:N",
+                            title="System",
+                            scale=alt.Scale(
+                                domain=["Irrigated", "Rainfed"],
+                                range=["#2171b5", "#2e8b2e"],
+                            ),
+                        ),
+                        tooltip=[
+                            alt.Tooltip("crop_name:N", title="Crop"),
+                            alt.Tooltip(
+                                "tech_label:N", title="System"
+                            ),
+                            alt.Tooltip(
+                                "value:Q", title=unit, format=fmt
+                            ),
+                        ],
+                    )
+                    .properties(
+                        height=max(300, top_n_display * 35)
+                    )
+                )
+            else:
+                # Simple bar (yield or no I/R data)
+                chart_df = a_data.nlargest(
+                    top_n_display, "value"
+                ).copy()
+                chart = (
+                    alt.Chart(chart_df)
+                    .mark_bar(cornerRadiusEnd=4, color="#2e8b2e")
+                    .encode(
+                        x=alt.X("value:Q", title=unit),
+                        y=alt.Y("crop_name:N", sort="-x", title=""),
+                        tooltip=[
+                            alt.Tooltip("crop_name:N", title="Crop"),
+                            alt.Tooltip(
+                                "value:Q", title=unit, format=fmt
+                            ),
+                            alt.Tooltip("category:N", title="Category"),
+                        ],
+                    )
+                    .properties(
+                        height=max(300, top_n_display * 35)
+                    )
+                )
             st.altair_chart(chart, use_container_width=True)
 
         with cat_col:
             st.subheader("Category Breakdown")
             cat_df = (
-                result.crop_data.groupby("category")["value"]
+                a_data.groupby("category")["value"]
                 .sum()
                 .reset_index()
                 .sort_values("value", ascending=False)
@@ -341,16 +401,39 @@ with tab1:
         st.markdown("---")
         st.subheader("All Crops Data")
 
-        display_df = result.crop_data.copy()
-        display_df = display_df[display_df["value"] > 0]
+        # Build table from "A" rows with optional I/R columns
+        display_df = a_data[a_data["value"] > 0].copy()
         display_df = display_df.sort_values("value", ascending=False)
         display_df = display_df.reset_index(drop=True)
         display_df.index += 1
+
+        if has_ir:
+            # Pivot I/R data and merge
+            ir_pivot = ir_data.pivot_table(
+                index="crop_name",
+                columns="tech_level",
+                values="value",
+                aggfunc="sum",
+            ).reset_index()
+            ir_pivot.columns.name = None
+            if "I" in ir_pivot.columns:
+                ir_pivot = ir_pivot.rename(columns={"I": "irrigated"})
+            if "R" in ir_pivot.columns:
+                ir_pivot = ir_pivot.rename(columns={"R": "rainfed"})
+            display_df = display_df.merge(
+                ir_pivot, on="crop_name", how="left"
+            )
+            for col in ["irrigated", "rainfed"]:
+                if col in display_df.columns:
+                    display_df[col] = display_df[col].fillna(0)
 
         if is_yield:
             display_df["value"] = display_df["value"].round(2)
         else:
             display_df["value"] = display_df["value"].round(0).astype(int)
+            for col in ["irrigated", "rainfed"]:
+                if col in display_df.columns:
+                    display_df[col] = display_df[col].round(0).astype(int)
 
         if not is_yield:
             total = display_df["value"].sum()
@@ -359,28 +442,30 @@ with tab1:
                     display_df["value"] / total * 100
                 ).round(1)
 
-        show_cols = ["crop_name", "category", "value"]
-        if "% of Total" in display_df.columns:
-            show_cols.append("% of Total")
+        # Format numbers
+        def _fmt_val(v, is_y=is_yield):
+            return f"{v:,.2f}" if is_y else f"{v:,.0f}"
 
-        # Format numbers as readable strings
-        if is_yield:
-            display_df["value_fmt"] = display_df["value"].apply(
-                lambda v: f"{v:,.2f}"
-            )
-        else:
-            display_df["value_fmt"] = display_df["value"].apply(
-                lambda v: f"{v:,.0f}"
-            )
+        display_df["value_fmt"] = display_df["value"].apply(_fmt_val)
+        for col in ["irrigated", "rainfed"]:
+            if col in display_df.columns:
+                display_df[f"{col}_fmt"] = display_df[col].apply(_fmt_val)
 
         fmt_cols = ["crop_name", "category", "value_fmt"]
+        if has_ir:
+            if "irrigated_fmt" in display_df.columns:
+                fmt_cols.append("irrigated_fmt")
+            if "rainfed_fmt" in display_df.columns:
+                fmt_cols.append("rainfed_fmt")
         if "% of Total" in display_df.columns:
             fmt_cols.append("% of Total")
 
         rename_map = {
             "crop_name": "Crop",
             "category": "Category",
-            "value_fmt": unit,
+            "value_fmt": f"Total ({unit})",
+            "irrigated_fmt": f"Irrigated ({unit})",
+            "rainfed_fmt": f"Rainfed ({unit})",
         }
 
         st.dataframe(
@@ -392,9 +477,18 @@ with tab1:
         # Downloads
         dl1, dl2, _ = st.columns([1, 1, 4])
         csv_cols = ["crop_name", "category", "value"]
+        for col in ["irrigated", "rainfed"]:
+            if col in display_df.columns:
+                csv_cols.append(col)
         if "% of Total" in display_df.columns:
             csv_cols.append("% of Total")
-        csv_rename = {"crop_name": "Crop", "category": "Category", "value": unit}
+        csv_rename = {
+            "crop_name": "Crop",
+            "category": "Category",
+            "value": f"Total ({unit})",
+            "irrigated": f"Irrigated ({unit})",
+            "rainfed": f"Rainfed ({unit})",
+        }
         csv_data = (
             display_df[csv_cols]
             .rename(columns=csv_rename)

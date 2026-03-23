@@ -74,27 +74,26 @@ def analyze_location(
         # Yield needs weighted average: sum(Y × H) / sum(H)
         crop_data = _compute_yield(data_dir, year, geometry, crops)
     else:
-        # Production, harvested area, physical area: use sum
+        # Get all tech levels (A=total, I=irrigated, R=rainfed)
         zip_path = _find_zip(data_dir, year, variable)
-        crop_data = compute_all_crops(zip_path, geometry, crops=crops, tech_levels=["A"])
+        crop_data = compute_all_crops(zip_path, geometry, crops=crops)
 
-    # Compute total and top crops
+    # Compute total and top crops from "A" (all systems) rows only
+    a_data = crop_data[crop_data["tech_level"] == "A"]
     if variable == "yield":
-        # Overall weighted avg yield across all crops doesn't make much sense,
-        # but we compute it as the mean of per-crop yields weighted by their area
         ha_zip = _find_zip(data_dir, year, "harvested_area")
         ha_data = compute_all_crops(ha_zip, geometry, crops=crops, tech_levels=["A"])
         ha_by_crop = dict(zip(ha_data["crop_code"], ha_data["value"]))
         weighted_sum = sum(
             row["value"] * ha_by_crop.get(row["crop_code"], 0)
-            for _, row in crop_data.iterrows()
+            for _, row in a_data.iterrows()
         )
-        total_ha = sum(ha_by_crop.get(c, 0) for c in crop_data["crop_code"])
+        total_ha = sum(ha_by_crop.get(c, 0) for c in a_data["crop_code"])
         total = weighted_sum / total_ha if total_ha > 0 else 0.0
     else:
-        total = float(crop_data["value"].sum())
+        total = float(a_data["value"].sum())
 
-    top_df = crop_data.nlargest(top_n, "value")
+    top_df = a_data.nlargest(top_n, "value")
     top_crops = list(zip(top_df["crop_name"], top_df["value"]))
 
     return AnalysisResult(
