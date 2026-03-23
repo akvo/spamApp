@@ -215,13 +215,15 @@ def build_index(
 def _build_single_country(args):
     """Worker function for parallel index building."""
     data_dir, admin_level, output_dir, year, crops, country_code, variables = args
-    temp_dir = output_dir
 
-    # Build into a temp output dir to avoid conflicts
+    # Each country gets its own subdirectory to avoid file conflicts
+    country_dir = output_dir / country_code
+    country_dir.mkdir(parents=True, exist_ok=True)
+
     result = build_index(
         data_dir=data_dir,
         admin_level=admin_level,
-        output_dir=temp_dir,
+        output_dir=country_dir,
         year=year,
         crops=crops,
         country_code=country_code,
@@ -281,7 +283,7 @@ def build_index_parallel(
             except Exception as e:
                 print(f"  Failed: {cc}: {e}")
 
-    # Merge all temp files + existing index
+    # Merge all per-country files + existing index
     output_path = output_dir / f"level_{admin_level}.parquet"
     dfs = []
 
@@ -293,14 +295,16 @@ def build_index_parallel(
         if not keep.empty:
             dfs.append(keep)
 
-    # Add new results from temp files
-    temp_file = temp_dir / f"level_{admin_level}.parquet"
-    if temp_file.exists():
-        dfs.append(pd.read_parquet(temp_file))
+    # Read each country's temp parquet
+    for cc, _ in completed:
+        temp_file = temp_dir / cc / f"level_{admin_level}.parquet"
+        if temp_file.exists():
+            dfs.append(pd.read_parquet(temp_file))
 
     if dfs:
         combined = pd.concat(dfs, ignore_index=True)
         combined.to_parquet(output_path, index=False)
+        print(f"  Merged: {len(combined):,} total rows")
 
     # Clean up temp
     import shutil
