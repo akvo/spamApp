@@ -16,7 +16,6 @@ from src.boundaries import (
 )
 from src.crops import CROPS, VARIABLES
 
-
 # --- Cached wrappers for performance ---
 # Bump _CACHE_VERSION when the analysis output format changes to invalidate stale cache
 _CACHE_VERSION = 2
@@ -262,6 +261,14 @@ with tab1:
         var_info = VARIABLES.get(result.variable[0].upper(), {})
         unit = var_info.get("unit", "")
 
+        # For charts: scale large values to millions
+        if result.variable in ("production", "harvested_area", "physical_area"):
+            chart_divisor = 1_000_000
+            chart_unit = "M mt" if result.variable == "production" else "M ha"
+        else:
+            chart_divisor = 1
+            chart_unit = unit
+
         # Split data by tech level
         all_data = result.crop_data
         a_data = all_data[all_data["tech_level"] == "A"]
@@ -294,10 +301,10 @@ with tab1:
             else:
                 var_title = result.variable.replace("_", " ").title()
                 st.subheader(
-                    f"Top {top_n_display} Crops — {var_title} ({unit})"
+                    f"Top {top_n_display} Crops — {var_title} ({chart_unit})"
                 )
 
-            fmt = ",.2f" if is_yield else ",.0f"
+            chart_fmt = ",.2f" if is_yield else ",.1f"
 
             if has_ir:
                 # Stacked bar: Irrigated + Rainfed
@@ -307,12 +314,15 @@ with tab1:
                 stack_df["tech_label"] = stack_df["tech_level"].map(
                     {"I": "Irrigated", "R": "Rainfed"}
                 )
+                stack_df["chart_value"] = stack_df["value"] / chart_divisor
                 chart = (
                     alt.Chart(stack_df)
                     .mark_bar(cornerRadiusEnd=2)
                     .encode(
                         x=alt.X(
-                            "value:Q", title=unit, stack="zero"
+                            "chart_value:Q",
+                            title=chart_unit,
+                            stack="zero",
                         ),
                         y=alt.Y(
                             "crop_name:N",
@@ -333,7 +343,9 @@ with tab1:
                                 "tech_label:N", title="System"
                             ),
                             alt.Tooltip(
-                                "value:Q", title=unit, format=fmt
+                                "chart_value:Q",
+                                title=chart_unit,
+                                format=chart_fmt,
                             ),
                         ],
                     )
@@ -346,16 +358,19 @@ with tab1:
                 chart_df = a_data.nlargest(
                     top_n_display, "value"
                 ).copy()
+                chart_df["chart_value"] = chart_df["value"] / chart_divisor
                 chart = (
                     alt.Chart(chart_df)
                     .mark_bar(cornerRadiusEnd=4, color="#2e8b2e")
                     .encode(
-                        x=alt.X("value:Q", title=unit),
+                        x=alt.X("chart_value:Q", title=chart_unit),
                         y=alt.Y("crop_name:N", sort="-x", title=""),
                         tooltip=[
                             alt.Tooltip("crop_name:N", title="Crop"),
                             alt.Tooltip(
-                                "value:Q", title=unit, format=fmt
+                                "chart_value:Q",
+                                title=chart_unit,
+                                format=chart_fmt,
                             ),
                             alt.Tooltip("category:N", title="Category"),
                         ],
