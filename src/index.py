@@ -4,6 +4,7 @@ Only writes to data/index/. Never modifies source data (see CONTRACTS.md).
 """
 
 import os
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -86,6 +87,15 @@ def build_index(
     if boundaries_gdf.empty:
         return output_path
 
+    n_boundaries = len(boundaries_gdf)
+    label = country_code or "all"
+    print(
+        f"  [{label}] {n_boundaries} regions, "
+        f"{len(crop_codes if crops else CROPS)} crops, "
+        f"{len(var_codes)} variables",
+        flush=True,
+    )
+
     # Pre-locate ZIPs
     zip_paths = {}
     for vc in var_codes:
@@ -102,6 +112,9 @@ def build_index(
             pass
 
     new_rows = []
+    total_combos = len(crop_codes) * len(var_codes)
+    combo_done = 0
+    t_start = time.time()
 
     for crop_code in crop_codes:
         if crop_code not in CROPS:
@@ -110,13 +123,19 @@ def build_index(
 
         for var_code in var_codes:
             if var_code not in zip_paths:
+                combo_done += 1
                 continue
 
+            combo_done += 1
             var_info = VARIABLES[var_code]
             zip_path = zip_paths[var_code]
 
             # Check if ALL boundaries for this crop/var are already indexed
-            sample_key = (boundaries_gdf.iloc[0]["admin_code"], crop_code, var_code)
+            sample_key = (
+                boundaries_gdf.iloc[0]["admin_code"],
+                crop_code,
+                var_code,
+            )
             if sample_key in existing_keys:
                 continue
 
@@ -124,6 +143,19 @@ def build_index(
                 vsi_path = get_vsi_path(zip_path, var_code, crop_code, "A")
             except FileNotFoundError:
                 continue
+
+            # Progress
+            elapsed = time.time() - t_start
+            pct = combo_done / total_combos * 100
+            crop_name = crop_info["name"]
+            var_name = var_info["name"]
+            print(
+                f"  [{label}] {combo_done}/{total_combos} "
+                f"({pct:.0f}%) {crop_name}/{var_name} "
+                f"[{elapsed:.0f}s]",
+                end="\r",
+                flush=True,
+            )
 
             # Batch compute: one raster read for ALL boundaries
             if var_code == "Y" and ha_zip:
@@ -153,6 +185,13 @@ def build_index(
                         "production_mt": values[i] if var_code == "P" else 0,
                     }
                 )
+
+    elapsed = time.time() - t_start
+    print(
+        f"  [{label}] Done: {len(new_rows):,} rows "
+        f"in {elapsed:.0f}s" + " " * 40,
+        flush=True,
+    )
 
     # Combine with existing data
     new_df = pd.DataFrame(new_rows)
