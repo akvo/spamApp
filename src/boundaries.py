@@ -201,15 +201,21 @@ def list_cached_countries(cache_path: Path = DEFAULT_CACHE_PATH) -> list[dict]:
 
 
 def _fix_gadm_name(name: str) -> str:
-    """Insert spaces before uppercase letters in GADM names.
+    """Insert spaces in CamelCase GADM names.
 
-    'DemocraticRepublicoftheCongo' -> 'Democratic Republicofthe Congo'
-    Then fix 'ofthe' -> 'of the'.
+    'DemocraticRepublicoftheCongo' -> 'Democratic Republic of the Congo'
+    'SouthAfrica' -> 'South Africa'
     """
     import re
 
+    # Split before uppercase letters: "SouthAfrica" -> "South Africa"
     spaced = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)
-    return spaced.replace("ofthe ", "of the ")
+    # Split before lowercase words like "of", "the", "and":
+    # "Republicofthe" -> "Republic of the"
+    spaced = re.sub(r"(?<=[a-zA-Z])(of|the|and|del|das|dos)(?=[a-zA-Z])", r" \1 ", spaced)
+    # Clean up double spaces
+    spaced = re.sub(r"  +", " ", spaced).strip()
+    return spaced
 
 
 def get_cached_country_names(
