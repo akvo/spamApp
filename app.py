@@ -296,10 +296,10 @@ _pending = st.session_state.pop("_pending_example", None)
 if _pending == "india_production":
     st.session_state.analysis_result = _cached_analyze("India", 0, "production")
     st.session_state._example_loaded = True
-elif _pending == "rice_rankings":
-    st.session_state.ranking_result = _cached_rank("RICE", 1, 10, "IND", "P")
-    st.session_state.ranking_crop = "Rice"
-    st.session_state.ranking_title = "Rice — Top States in India"
+elif _pending == "maize_kenya":
+    st.session_state.ranking_result = _cached_rank("MAIZ", 1, 10, "KEN", "P")
+    st.session_state.ranking_crop = "Maize"
+    st.session_state.ranking_title = "Maize — Top States in Kenya"
     st.session_state.ranking_highlight = None
     st.session_state._example_loaded = True
 elif _pending == "wheat_global":
@@ -1256,15 +1256,15 @@ with tab4:
     with ex2:
         st.markdown("**Crop Rankings**")
         st.markdown(
-            "Which Indian states produce the most rice? "
+            "Which Kenyan states produce the most maize? "
             "See the ranking with map."
         )
         if st.button(
-            "Rice — Top States in India",
+            "Maize — Top States in Kenya",
             use_container_width=True,
-            key="ex_rice",
+            key="ex_maize",
         ):
-            st.session_state._pending_example = "rice_rankings"
+            st.session_state._pending_example = "maize_kenya"
             st.rerun()
 
     with ex3:
