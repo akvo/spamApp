@@ -630,19 +630,6 @@ with tab2:
                 f"top {lvl_desc} in **{selected_location}**."
             )
 
-        # Show index availability
-        for lvl in [0, 1, 2]:
-            info = get_index_info(lvl)
-            if info["countries"]:
-                lvl_name = {0: "Countries", 1: "States", 2: "Districts"}[lvl]
-                crop_list = [
-                    CROPS[c]["name"] for c in info["crops"] if c in CROPS
-                ]
-                st.caption(
-                    f"**{lvl_name}:** "
-                    f"{', '.join(info['countries'])} — "
-                    f"Crops: {', '.join(crop_list)}"
-                )
     elif ranking_df.empty:
         st.warning(
             "No data found. The index may not contain "
