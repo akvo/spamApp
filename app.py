@@ -1187,30 +1187,14 @@ with tab3:
 with tab4:
     from src.faq import FAQ_SECTIONS
 
-    st.subheader("Frequently Asked Questions")
-
-    for section_name, questions in FAQ_SECTIONS.items():
-        st.markdown(f"**{section_name}**")
-        for item in questions:
-            with st.expander(item["q"]):
-                st.markdown(item["a"])
-        st.markdown("")
-
-    # --- AI Chat (if API key available) ---
-    st.markdown("---")
-
+    # --- AI Chat first (prominent) ---
     try:
         api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
     except Exception:
         api_key = ""
 
-    if not api_key:
-        st.info(
-            "Add your API key to `.streamlit/secrets.toml` to "
-            "enable the AI assistant for freeform questions."
-        )
-    else:
-        st.subheader("Ask the AI Assistant")
+    if api_key:
+        st.subheader("AI Assistant")
         st.caption(
             "Ask any question about the SPAM dataset, methodology, "
             "or this tool. Powered by Claude."
@@ -1261,3 +1245,19 @@ with tab4:
             st.session_state.chat_history.append(
                 {"role": "assistant", "content": answer}
             )
+    else:
+        st.info(
+            "Add your API key to `.streamlit/secrets.toml` to "
+            "enable the AI assistant."
+        )
+
+    # --- FAQ below ---
+    st.markdown("---")
+    st.subheader("Frequently Asked Questions")
+
+    for section_name, questions in FAQ_SECTIONS.items():
+        st.markdown(f"**{section_name}**")
+        for item in questions:
+            with st.expander(item["q"]):
+                st.markdown(item["a"])
+        st.markdown("")
