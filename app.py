@@ -291,26 +291,6 @@ _VAR_NAME_TO_CODE = {
 var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 
-# Load pending examples (set by Help tab buttons on previous rerun)
-_pending = st.session_state.pop("_pending_example", None)
-if _pending == "india_production":
-    st.session_state.analysis_result = _cached_analyze("India", 0, "production")
-    st.session_state._example_loaded = True
-elif _pending == "maize_kenya":
-    st.session_state.ranking_result = _cached_rank("MAIZ", 1, 10, "KEN", "P")
-    st.session_state.ranking_crop = "Maize"
-    st.session_state.ranking_title = "Maize — Top States in Kenya"
-    st.session_state.ranking_highlight = None
-    st.session_state._example_loaded = True
-elif _pending == "wheat_global":
-    idx = pd.read_parquet(INDEX_DIR / "level_0.parquet")
-    st.session_state.gc_result_data = idx[idx["crop_code"] == "WHEA"].copy()
-    st.session_state.gc_result_crop = "Wheat"
-    st.session_state.gc_result_level = 0
-    st.session_state._example_loaded = True
-else:
-    # Clear example flag so stale-check resumes
-    st.session_state._example_loaded = False
 
 # --- Header ---
 st.title("SPAM 2020 Crop Analyzer")
@@ -342,14 +322,8 @@ with tab1:
 
     result = st.session_state.get("analysis_result")
     # Clear stale results if location/variable changed
-    # (but not if loaded from an example button)
-    if (
-        result is not None
-        and not st.session_state.get("_example_loaded")
-        and (
-            result.location_name != selected_location
-            or result.variable != variable
-        )
+    if result is not None and (
+        result.location_name != selected_location or result.variable != variable
     ):
         result = None
     if result is None:
@@ -1011,11 +985,7 @@ with tab3:
     gc_lvl = st.session_state.get("gc_result_level")
 
     # Don't show stale results if inputs have changed
-    if (
-        gc_data is not None
-        and not st.session_state.get("_example_loaded")
-        and (gc_crop != gc_crop_name or gc_lvl != gc_level)
-    ):
+    if gc_data is not None and (gc_crop != gc_crop_name or gc_lvl != gc_level):
         gc_data = None
 
     if gc_data is None:
@@ -1230,58 +1200,6 @@ with tab3:
 with tab4:
     from src.faq import FAQ_SECTIONS
 
-    # --- Interactive Examples ---
-    st.subheader("Try It Yourself")
-    st.caption(
-        "Click an example below to load it. Then switch to the "
-        "corresponding tab to see the results."
-    )
-
-    ex1, ex2, ex3 = st.columns(3)
-
-    with ex1:
-        st.markdown("**Location Analysis**")
-        st.markdown(
-            "See what crops India produces, with irrigated vs "
-            "rainfed breakdown."
-        )
-        if st.button(
-            "India — Top Crops",
-            use_container_width=True,
-            key="ex_india",
-        ):
-            st.session_state._pending_example = "india_production"
-            st.rerun()
-
-    with ex2:
-        st.markdown("**Crop Rankings**")
-        st.markdown(
-            "Which Kenyan states produce the most maize? "
-            "See the ranking with map."
-        )
-        if st.button(
-            "Maize — Top States in Kenya",
-            use_container_width=True,
-            key="ex_maize",
-        ):
-            st.session_state._pending_example = "maize_kenya"
-            st.rerun()
-
-    with ex3:
-        st.markdown("**Global Comparisons**")
-        st.markdown(
-            "Compare wheat production, harvested area, and yield "
-            "across all countries."
-        )
-        if st.button(
-            "Wheat — Global View",
-            use_container_width=True,
-            key="ex_wheat",
-        ):
-            st.session_state._pending_example = "wheat_global"
-            st.rerun()
-
-    st.markdown("---")
     st.subheader("Frequently Asked Questions")
 
     for section_name, questions in FAQ_SECTIONS.items():
