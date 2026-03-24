@@ -149,12 +149,15 @@ CROP_NAMES = {
 }
 
 
-def _simplify_gdf(gdf, tolerance=0.05):
+def _simplify_gdf(gdf, admin_level=0):
     """Simplify geometries to reduce vertex count for faster map rendering.
 
-    tolerance=0.05 degrees ≈ 5km — invisible at country/state zoom levels
-    but reduces vertices by ~95%.
+    Tolerance scales by admin level:
+    - Level 0 (countries): 0.02° ≈ 2km — good for world maps
+    - Level 1 (states): 0.01° ≈ 1km — good for country maps
+    - Level 2 (districts): 0.002° ≈ 200m — preserves district shapes
     """
+    tolerance = {0: 0.02, 1: 0.01, 2: 0.002}.get(admin_level, 0.01)
     simplified = gdf.copy()
     simplified["geometry"] = simplified.geometry.simplify(
         tolerance, preserve_topology=True
@@ -852,7 +855,7 @@ with tab2:
                         "weight": 0.5,
                     }
 
-                map_gdf = _simplify_gdf(map_gdf)
+                map_gdf = _simplify_gdf(map_gdf, admin_level=rank_level)
                 bounds = map_gdf.total_bounds
                 m = folium.Map(tiles="cartodbpositron")
 
@@ -1133,7 +1136,7 @@ with tab3:
                             "weight": 0.5,
                         }
 
-                    map_gdf = _simplify_gdf(map_gdf)
+                    map_gdf = _simplify_gdf(map_gdf, admin_level=gc_lvl)
                     bounds = map_gdf.total_bounds
                     m = folium.Map(tiles="cartodbpositron")
                     folium.GeoJson(
