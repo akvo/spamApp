@@ -150,12 +150,15 @@ CROP_NAMES = {
 
 
 def _make_pct_colormap(values_series):
-    """Create a percentage-based color function from a pandas Series.
+    """Create a percentage-based color function with sqrt scaling.
 
     Returns (color_fn, vmax) where color_fn maps a value to a hex color.
-    Colors by share of total (0-100%) so dominant producers stand out.
+    Colors by sqrt of share-of-total so both dominant and minor
+    producers are visually distinguishable. Scale caps at the actual
+    max percentage, not 100%.
     """
     import branca.colormap as cm
+    import numpy as np
 
     total = float(values_series.sum())
     vmax = float(values_series.max()) if total > 0 else 1
@@ -163,18 +166,21 @@ def _make_pct_colormap(values_series):
     if total == 0:
         return lambda v: "#f7fcf5", 1
 
-    # Color by percentage of total, 0% = lightest, 100% = darkest
+    max_pct = vmax / total * 100
+    # sqrt scaling: spreads lower values while still showing dominance
+    max_sqrt = np.sqrt(max_pct)
+
     colormap = cm.LinearColormap(
         ["#f7fcf5", "#c7e9c0", "#74c476", "#238b45", "#005a32"],
         vmin=0,
-        vmax=100,
+        vmax=max_sqrt,
     )
 
     def color_fn(v):
         if v <= 0:
             return "#f7fcf5"
         pct = v / total * 100
-        return colormap(min(pct, 100))
+        return colormap(float(np.sqrt(pct)))
 
     return color_fn, vmax
 
