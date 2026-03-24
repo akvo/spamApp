@@ -51,6 +51,7 @@
 | T10 | TODO | Integration tests |
 | T12 | TODO | Cross-level validation (sum of children ≈ parent total) |
 | T14 | TODO | Raster clip & export |
-| T25 | TODO | Global country-level rankings (build index without --country filter) |
-| T26 | TODO | Time-series support (add more years to data/{year}/) |
-| T27 | TODO | Fix "Ug and a" display name bug in `_fix_gadm_name` |
+| T25 | TODO | Global Comparisons: new tab showing global distribution of a crop across all variables at L0/L1 |
+| T26 | TODO | Rebuild indexes with I/R tech levels: `build-index --level 0 --parallel 8 --tech-levels A,I,R` (3x data) |
+| T27 | TODO | Time-series support (add more years to data/{year}/) |
+| T28 | TODO | Fix "Ug and a" display name bug in `_fix_gadm_name` |

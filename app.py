@@ -231,7 +231,9 @@ var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 st.title("SPAM 2020 Crop Analyzer")
 
 # --- Tabs ---
-tab1, tab2 = st.tabs(["Location Analysis", "Crop Rankings"])
+tab1, tab2, tab3 = st.tabs(
+    ["Location Analysis", "Crop Rankings", "Global Comparisons"]
+)
 
 
 # --- Tab 1: Location Analysis ---
@@ -881,5 +883,254 @@ with tab2:
             "Download CSV",
             csv_data,
             f"{ranking_crop_name}_rankings.csv",
+            "text/csv",
+        )
+
+
+# --- Tab 3: Global Comparisons ---
+with tab3:
+    g1, g2, g3 = st.columns([3, 2, 1])
+
+    with g1:
+        gc_crop_name = st.selectbox(
+            "Crop", options=list(CROP_NAMES.values()), key="gc_crop"
+        )
+        gc_crop_code = next(
+            code for code, name in CROP_NAMES.items() if name == gc_crop_name
+        )
+
+    with g2:
+        gc_level = st.selectbox(
+            "Level",
+            options=[0, 1],
+            format_func=lambda x: {0: "Countries", 1: "States"}[x],
+            key="gc_level",
+        )
+
+    with g3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        gc_btn = st.button("Compare", type="primary", use_container_width=True)
+
+    if gc_btn:
+        index_path = INDEX_DIR / f"level_{gc_level}.parquet"
+        if not index_path.exists():
+            st.error(f"No index found for level {gc_level}.")
+        else:
+            idx = pd.read_parquet(index_path)
+            crop_idx = idx[idx["crop_code"] == gc_crop_code].copy()
+
+            if "variable" not in crop_idx.columns:
+                crop_idx["variable"] = "P"
+                crop_idx["value"] = crop_idx["production_mt"]
+
+            # Level 1: filter to selected country's states
+            if gc_level == 1:
+                crop_idx = crop_idx[crop_idx["country_code"] == country_code]
+
+            if crop_idx.empty:
+                st.warning("No data found for this crop/level.")
+            else:
+                st.session_state.gc_data = crop_idx
+                st.session_state.gc_crop = gc_crop_name
+                st.session_state.gc_level = gc_level
+
+    gc_data = st.session_state.get("gc_data")
+    gc_crop = st.session_state.get("gc_crop")
+    gc_lvl = st.session_state.get("gc_level")
+
+    if gc_data is None:
+        st.info(
+            "Select a crop and click **Compare** to see "
+            "global distribution across all variables."
+        )
+    elif gc_data.empty:
+        st.warning("No data available.")
+    else:
+        st.markdown("---")
+        level_name = {0: "Countries", 1: "States"}[gc_lvl]
+        st.subheader(f"{gc_crop} — Global Comparison ({level_name})")
+
+        # Pivot: one row per region, columns for each variable
+        pivot = gc_data.pivot_table(
+            index=["admin_name", "country_name"],
+            columns="variable",
+            values="value",
+            aggfunc="sum",
+        ).reset_index()
+        pivot.columns.name = None
+
+        var_rename = {
+            "P": "Production (mt)",
+            "H": "Harvested Area (ha)",
+            "A": "Physical Area (ha)",
+            "Y": "Yield (t/ha)",
+        }
+        pivot = pivot.rename(columns=var_rename)
+
+        prod_col = "Production (mt)"
+        if prod_col in pivot.columns:
+            pivot = pivot.sort_values(prod_col, ascending=False)
+        pivot = pivot.reset_index(drop=True)
+        pivot.index += 1
+
+        # --- Three charts side by side ---
+        chart_vars = [
+            ("Production (mt)", "M mt", 1_000_000),
+            ("Harvested Area (ha)", "M ha", 1_000_000),
+            ("Yield (t/ha)", "t/ha", 1),
+        ]
+
+        cols = st.columns(len(chart_vars))
+        for col_st, (col_name, col_unit, divisor) in zip(cols, chart_vars):
+            with col_st:
+                if col_name in pivot.columns:
+                    chart_df = pivot.nlargest(10, col_name)[
+                        ["admin_name", col_name]
+                    ].copy()
+                    chart_df["chart_val"] = chart_df[col_name] / divisor
+                    fmt = ",.2f" if "Yield" in col_name else ",.1f"
+
+                    c = (
+                        alt.Chart(chart_df)
+                        .mark_bar(cornerRadiusEnd=3, color="#2e8b2e")
+                        .encode(
+                            x=alt.X("chart_val:Q", title=col_unit),
+                            y=alt.Y("admin_name:N", sort="-x", title=""),
+                            tooltip=[
+                                alt.Tooltip("admin_name:N", title="Region"),
+                                alt.Tooltip(
+                                    "chart_val:Q", title=col_unit, format=fmt
+                                ),
+                            ],
+                        )
+                        .properties(
+                            height=300, title=col_name.split(" (")[0]
+                        )
+                    )
+                    st.altair_chart(c, use_container_width=True)
+
+        # --- Choropleth map ---
+        if prod_col in pivot.columns:
+            st.markdown("---")
+            st.subheader(f"{gc_crop} Production — Map")
+            try:
+                import branca.colormap as cm
+                import folium
+                import numpy as np
+                from streamlit_folium import st_folium
+
+                name_col = f"NAME_{gc_lvl}"
+                map_cc = country_code if gc_lvl == 1 else None
+
+                # For level 0, load all country boundaries
+                if gc_lvl == 0:
+                    # Merge all cached country boundaries
+                    gdf_parts = []
+                    for cname, ccode in countries.items():
+                        g = _cached_boundary_gdf(ccode, 0)
+                        if g is not None and "COUNTRY" in g.columns:
+                            g = g.copy()
+                            g["_name"] = g["COUNTRY"]
+                            gdf_parts.append(g[["_name", "geometry"]])
+                    if gdf_parts:
+                        import geopandas as gpd
+
+                        boundary_gdf = gpd.GeoDataFrame(
+                            pd.concat(gdf_parts, ignore_index=True),
+                            crs="EPSG:4326",
+                        )
+                        name_col = "_name"
+                    else:
+                        boundary_gdf = None
+                else:
+                    boundary_gdf = _cached_boundary_gdf(country_code, gc_lvl)
+
+                if boundary_gdf is not None and name_col in boundary_gdf.columns:
+                    map_merge = pivot[["admin_name", prod_col]].copy()
+                    map_gdf = boundary_gdf.merge(
+                        map_merge,
+                        left_on=name_col,
+                        right_on="admin_name",
+                        how="left",
+                    )
+                    map_gdf[prod_col] = map_gdf[prod_col].fillna(0)
+
+                    nonzero = map_gdf[prod_col][map_gdf[prod_col] > 0]
+                    vmax = float(nonzero.max()) if len(nonzero) > 0 else 1
+
+                    if len(nonzero) > 2:
+                        q33 = float(np.percentile(nonzero, 33))
+                        q66 = float(np.percentile(nonzero, 66))
+
+                        def _gc_color(v):
+                            if v <= 0:
+                                return "#f7fcf5"
+                            if v <= q33:
+                                return "#c7e9c0"
+                            if v <= q66:
+                                return "#74c476"
+                            return "#005a32"
+                    else:
+                        cmap = cm.LinearColormap(
+                            ["#f7fcf5", "#74c476", "#005a32"], vmin=0, vmax=vmax
+                        )
+                        _gc_color = lambda v: cmap(v if v else 0)  # noqa: E731
+
+                    def gc_style(feature):
+                        val = feature["properties"].get(prod_col, 0)
+                        return {
+                            "fillColor": _gc_color(val),
+                            "fillOpacity": 0.75,
+                            "color": "#333",
+                            "weight": 0.5,
+                        }
+
+                    bounds = map_gdf.total_bounds
+                    m = folium.Map(tiles="cartodbpositron")
+                    folium.GeoJson(
+                        map_gdf.__geo_interface__,
+                        style_function=gc_style,
+                        tooltip=folium.GeoJsonTooltip(
+                            fields=[name_col, prod_col],
+                            aliases=["Region", prod_col],
+                            localize=True,
+                        ),
+                    ).add_to(m)
+                    m.fit_bounds(
+                        [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
+                        padding=(20, 20),
+                    )
+                    st_folium(m, use_container_width=True, height=450)
+            except Exception as e:
+                st.caption(f"Map could not be rendered: {e}")
+
+        # --- Data table ---
+        st.markdown("---")
+        st.subheader("Full Comparison Data")
+
+        show_pivot = pivot.copy()
+        for c in [prod_col, "Harvested Area (ha)", "Physical Area (ha)"]:
+            if c in show_pivot.columns:
+                show_pivot[c] = show_pivot[c].apply(lambda v: f"{v:,.0f}")
+        if "Yield (t/ha)" in show_pivot.columns:
+            show_pivot["Yield (t/ha)"] = show_pivot["Yield (t/ha)"].apply(
+                lambda v: f"{v:,.2f}"
+            )
+
+        display_cols = ["admin_name", "country_name"]
+        for c in [prod_col, "Harvested Area (ha)", "Physical Area (ha)", "Yield (t/ha)"]:
+            if c in show_pivot.columns:
+                display_cols.append(c)
+
+        show_pivot = show_pivot[display_cols].rename(
+            columns={"admin_name": "Region", "country_name": "Country"}
+        )
+        st.dataframe(show_pivot, use_container_width=True, height=400)
+
+        csv_data = show_pivot.to_csv(index=False)
+        st.download_button(
+            "Download CSV",
+            csv_data,
+            f"{gc_crop}_global_comparison.csv",
             "text/csv",
         )
