@@ -735,7 +735,7 @@ with tab2:
         try:
             import branca.colormap as cm
             import folium
-            from streamlit_folium import st_folium
+            from streamlit.components.v1 import html as st_html
 
             name_col = f"NAME_{rank_level}"
             boundary_gdf = _cached_boundary_gdf(country_code, rank_level)
@@ -861,7 +861,7 @@ with tab2:
                     padding=(20, 20),
                 )
 
-                st_folium(m, use_container_width=True, height=500)
+                st_html(m._repr_html_(), height=500)
             else:
                 st.caption("Map not available — boundaries not cached.")
         except Exception as e:
@@ -1040,7 +1040,7 @@ with tab3:
                 import branca.colormap as cm
                 import folium
                 import numpy as np
-                from streamlit_folium import st_folium
+                from streamlit.components.v1 import html as st_html
 
                 name_col = f"NAME_{gc_lvl}"
                 map_cc = country_code if gc_lvl == 1 else None
@@ -1123,7 +1123,7 @@ with tab3:
                         [[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
                         padding=(20, 20),
                     )
-                    st_folium(m, use_container_width=True, height=450)
+                    st_html(m._repr_html_(), height=450)
             except Exception as e:
                 st.caption(f"Map could not be rendered: {e}")
 
