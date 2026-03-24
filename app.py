@@ -577,21 +577,29 @@ with tab2:
 
     if rank_btn:
         try:
-            df = _cached_rank(
-                crop_code, rank_level, top_n, country_code, var_code
-            )
-            # If a state is selected, filter districts to that state
-            # by looking up which districts belong to it from GADM cache
-            if selected_level == 1 and rank_level == 2 and not df.empty:
+            # If a state is selected, fetch all districts for the country
+            # then filter to the state BEFORE applying top_n
+            if selected_level == 1 and rank_level == 2:
+                df = _cached_rank(
+                    crop_code, rank_level, 9999, country_code, var_code
+                )
                 boundary_gdf = _cached_boundary_gdf(country_code, 2)
-                if boundary_gdf is not None and "NAME_1" in boundary_gdf.columns:
+                if (
+                    boundary_gdf is not None
+                    and "NAME_1" in boundary_gdf.columns
+                    and not df.empty
+                ):
                     state_districts = set(
                         boundary_gdf[boundary_gdf["NAME_1"] == state_name][
                             "NAME_2"
                         ]
                     )
                     df = df[df["admin_name"].isin(state_districts)]
-                    df = df.reset_index(drop=True)
+                df = df.head(top_n).reset_index(drop=True)
+            else:
+                df = _cached_rank(
+                    crop_code, rank_level, top_n, country_code, var_code
+                )
             st.session_state.ranking_result = df
             st.session_state.ranking_crop = crop_name
             st.session_state.ranking_title = rank_title
