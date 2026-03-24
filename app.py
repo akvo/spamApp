@@ -1199,6 +1199,13 @@ with tab3:
 with tab4:
     from src.faq import FAQ_SECTIONS
 
+    # Demo GIF
+    demo_path = Path("assets/demo/demo.gif")
+    if demo_path.exists():
+        st.subheader("Quick Tour")
+        st.image(str(demo_path), use_container_width=True)
+        st.markdown("")
+
     st.subheader("Frequently Asked Questions")
 
     for section_name, questions in FAQ_SECTIONS.items():
