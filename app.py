@@ -1023,12 +1023,18 @@ with tab3:
         pivot = pivot.reset_index(drop=True)
         pivot.index += 1
 
-        # For yield chart: only show top 20 producers
-        top_producers = set()
+        # For yield chart: top 20 producers with >= 5000 ha
+        ha_col = "Harvested Area (ha)"
+        yield_eligible = set()
         if prod_col in pivot.columns:
-            top_producers = set(
-                pivot.nlargest(20, prod_col)["admin_name"]
-            )
+            top20 = set(pivot.nlargest(20, prod_col)["admin_name"])
+            if ha_col in pivot.columns:
+                min_area = set(
+                    pivot[pivot[ha_col] >= 5000]["admin_name"]
+                )
+                yield_eligible = top20 & min_area
+            else:
+                yield_eligible = top20
 
         # --- Three charts side by side ---
         chart_vars = [
@@ -1042,9 +1048,9 @@ with tab3:
             with col_st:
                 if col_name in pivot.columns:
                     # For yield: filter to top 20 producers first
-                    if col_name == yield_col and top_producers:
+                    if col_name == yield_col and yield_eligible:
                         eligible = pivot[
-                            pivot["admin_name"].isin(top_producers)
+                            pivot["admin_name"].isin(yield_eligible)
                         ]
                     else:
                         eligible = pivot

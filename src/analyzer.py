@@ -280,9 +280,23 @@ def rank_by_crop(
     if "production_mt" not in crop_df.columns:
         crop_df["production_mt"] = crop_df["rank_value"]
 
-    # For yield: only show regions that are top 20 producers
-    # (avoids tiny regions with extreme yields dominating rankings)
+    # For yield: filter to meaningful producers only
+    # 1. Must have >= 5000 ha harvested area
+    # 2. Must be in top 20 by production
     if variable == "Y" and "variable" in df.columns:
+        # Harvested area filter
+        ha_df = df[
+            (df["crop_code"] == crop_code) & (df["variable"] == "H")
+        ].copy()
+        if country_code:
+            ha_df = ha_df[ha_df["country_code"] == country_code]
+        if parent_name and "parent_name" in ha_df.columns:
+            ha_df = ha_df[ha_df["parent_name"] == parent_name]
+        min_area_codes = set(
+            ha_df[ha_df["value"] >= 5000]["admin_code"]
+        )
+
+        # Top 20 producers filter
         prod_df = df[
             (df["crop_code"] == crop_code) & (df["variable"] == "P")
         ].copy()
@@ -293,7 +307,10 @@ def rank_by_crop(
         top_producers = set(
             prod_df.nlargest(20, "value")["admin_code"]
         )
-        crop_df = crop_df[crop_df["admin_code"].isin(top_producers)]
+
+        # Must satisfy both conditions
+        eligible = min_area_codes & top_producers
+        crop_df = crop_df[crop_df["admin_code"].isin(eligible)]
 
     crop_df = crop_df.sort_values("rank_value", ascending=False)
     return crop_df.head(top_n).reset_index(drop=True)
