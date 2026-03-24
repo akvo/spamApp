@@ -279,5 +279,20 @@ def init_boundaries_cmd(
     console.print(f"[green]Done:[/green] {len(cached)} layers in {cache}")
 
 
+@app.command(name="build-knowledge")
+def build_knowledge_cmd() -> None:
+    """Build the RAG knowledge base: scrape MapSPAM site + index all docs."""
+    from src.rag import build_vector_store, collect_documents, scrape_mapspam_pages
+
+    console.print("Scraping MapSPAM pages...")
+    scrape_mapspam_pages()
+
+    console.print("Collecting and indexing documents...")
+    docs = collect_documents()
+    build_vector_store(docs)
+
+    console.print("[green]Knowledge base built.[/green]")
+
+
 if __name__ == "__main__":
     app()

@@ -295,8 +295,8 @@ var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 st.title("SPAM 2020 Crop Analyzer")
 
 # --- Tabs ---
-tab1, tab2, tab3 = st.tabs(
-    ["Location Analysis", "Crop Rankings", "Global Comparisons"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Location Analysis", "Crop Rankings", "Global Comparisons", "Help & FAQ"]
 )
 
 
@@ -1193,3 +1193,82 @@ with tab3:
             f"{gc_crop}_global_comparison.csv",
             "text/csv",
         )
+
+
+# --- Tab 4: Help & FAQ ---
+with tab4:
+    from src.faq import FAQ_SECTIONS
+
+    st.subheader("Frequently Asked Questions")
+
+    for section_name, questions in FAQ_SECTIONS.items():
+        st.markdown(f"**{section_name}**")
+        for item in questions:
+            with st.expander(item["q"]):
+                st.markdown(item["a"])
+        st.markdown("")
+
+    # --- AI Chat (if API key available) ---
+    st.markdown("---")
+
+    import os
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+    if not api_key:
+        st.info(
+            "Set the `ANTHROPIC_API_KEY` environment variable to "
+            "enable the AI assistant for freeform questions."
+        )
+    else:
+        st.subheader("Ask the AI Assistant")
+        st.caption(
+            "Ask any question about the SPAM dataset, methodology, "
+            "or this tool. Powered by Claude."
+        )
+
+        # Chat history
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        # Display chat history
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # Chat input
+        if prompt := st.chat_input("Ask about SPAM data..."):
+            # Show user message
+            st.session_state.chat_history.append(
+                {"role": "user", "content": prompt}
+            )
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            # Build session context
+            session_ctx = f"Selected country: {country_name}"
+            if state_name != "(All)":
+                session_ctx += f", State: {state_name}"
+            if district_name:
+                session_ctx += f", District: {district_name}"
+            session_ctx += f", Variable: {variable}"
+
+            # Generate answer
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    from src.rag import generate_answer
+
+                    answer = generate_answer(
+                        question=prompt,
+                        session_context=session_ctx,
+                        chat_history=[
+                            m
+                            for m in st.session_state.chat_history[:-1]
+                            if m["role"] in ("user", "assistant")
+                        ],
+                    )
+                    st.markdown(answer)
+
+            st.session_state.chat_history.append(
+                {"role": "assistant", "content": answer}
+            )
