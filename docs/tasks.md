@@ -2,48 +2,55 @@
 
 ## Core Pipeline
 
-| Task | Status | Layer | Deps | Description |
-|------|--------|-------|------|-------------|
-| T1 | DONE | 0 | — | `crops.py`: crop registry with categories + filename parser |
-| T2 | DONE | 0 | — | Test fixtures: tiny GeoTIFF + test polygon in conftest.py |
-| T3 | DONE | 1 | T1,T2 | `raster.py`: read GeoTIFF from ZIP, compute zonal sum |
-| T4 | DONE | 1 | T2 | `boundaries.py`: GADM lookup + custom boundary loading |
-| T5 | DONE | 2 | T3,T4 | `analyzer.py`: orchestrate on-the-fly analysis |
-| T6 | DONE | 2 | T3,T4 | `index.py`: build parquet index (incremental, single-crop) |
-| T7 | DONE | 2 | T6 | `analyzer.py`: rank_by_crop from parquet index |
-| T8 | DONE | 3 | T5,T7 | `formatter.py`: Rich table output, CSV/JSON export |
-| T9 | DONE | 3 | T5,T7,T8 | `cli.py`: Typer CLI with all commands |
-| T10 | TODO | 4 | T9 | Integration tests: end-to-end workflows |
+| Task | Status | Description |
+|------|--------|-------------|
+| T1 | DONE | `crops.py`: 46 crop codes with names, categories, tech levels, variables, `parse_filename()` |
+| T2 | DONE | Test fixtures: tiny GeoTIFF (10x10), test polygons, test ZIPs in `conftest.py` |
+| T3 | DONE | `raster.py`: `compute_zonal_sum` via /vsizip/, `compute_all_crops`, `batch_zonal_stats_gdf` |
+| T4 | DONE | `boundaries.py`: GADM download + local GeoPackage cache + custom boundary overrides |
+| T5 | DONE | `analyzer.py`: `analyze_location()` on-the-fly with index-first lookup |
+| T6 | DONE | `index.py`: `build_index()` with batch zonal stats, incremental, multi-variable, parallel |
+| T7 | DONE | `analyzer.py`: `rank_by_crop()` from parquet index with variable/country/parent filters |
+| T8 | DONE | `formatter.py`: Rich table output, CSV/JSON export, yield-aware formatting |
+| T9 | DONE | `cli.py`: Typer CLI — location, ranking, crops, build-index, prep-boundary, init-boundaries |
+| T10 | TODO | Integration tests: end-to-end workflows with test fixtures |
 
-## Extended Features (inspired by mapspamc)
+## Extended Features
 
-| Task | Status | Layer | Deps | Description |
-|------|--------|-------|------|-------------|
-| T11 | TODO | 2 | T3,T5 | Multi-variable analysis: support all 4 variables (P, H, A, Y) |
-| T12 | TODO | 3 | T5 | Validation: aggregate sub-regions and compare to parent total |
-| T13 | TODO | 3 | T3,T4 | Interactive map visualization: folium/leaflet choropleth maps |
-| T14 | TODO | 3 | T3 | Raster clipping & export: clip GeoTIFF to admin boundary |
-| T15 | TODO | 2 | T1 | Crop taxonomy: category groupings for filtering/grouping |
+| Task | Status | Description |
+|------|--------|-------------|
+| T11 | DONE | Multi-variable: all 4 variables (P, H, A, Y) with weighted avg yield |
+| T12 | TODO | Validation: aggregate sub-regions and compare to parent total |
+| T13 | DONE | Choropleth maps: folium maps in Streamlit with quantile coloring + legend |
+| T14 | TODO | Raster clipping & export: clip GeoTIFF to admin boundary, save as new file |
+| T15 | DONE | Crop taxonomy: category groupings, category breakdown chart in app |
 
-## Task Details
+## Streamlit App
 
-### T1: crops.py
-- **Tests**: parse_filename extracts crop/tech, CROPS has all 46 entries, unknown code raises ValueError, category groupings correct
-- **Implement**: CROPS dict with name+category, TECH_LEVELS, VARIABLES, parse_filename()
-- **Verify**: `make check`
+| Task | Status | Description |
+|------|--------|-------------|
+| T16 | DONE | Streamlit dashboard: Location Analysis tab with stacked I/R bar charts |
+| T17 | DONE | Crop Rankings tab with bar chart, choropleth map, data table |
+| T18 | DONE | Sidebar: cascading Country → State → District dropdowns from GADM cache |
+| T19 | DONE | Green theme CSS, responsive layout |
+| T20 | DONE | Performance: `@st.cache_data` on analysis, `@st.cache_resource` on boundaries |
 
-### T2: Test fixtures
-- **Implement**: conftest.py with tiny GeoTIFF fixture (10x10, known values, EPSG:4326), test polygon (shapely box), test ZIP containing the GeoTIFF
-- **Verify**: `make check`
+## Data Infrastructure
 
-### T3: raster.py
-- **Tests**: compute_production returns expected sum; handles nodata; handles geometry outside bounds; reads from ZIP
-- **Implement**: compute_production(), compute_all_production(), batch_zonal_stats()
-- **Verify**: `make check`
+| Task | Status | Description |
+|------|--------|-------------|
+| T21 | DONE | GADM boundary cache: `init-boundaries` downloads 45 countries to GeoPackage |
+| T22 | DONE | Level 0 + 1 parquet indexes: all 45 countries, 46 crops, 4 variables |
+| T23 | DONE | Level 2 parquet index: all 45 countries (~30K districts), batch + parallel build |
+| T24 | DONE | Extracted GeoTIFFs: prefer disk files over /vsizip/ for faster reads |
 
-### T4: boundaries.py
-- **Tests**: standardize_boundary produces correct schema; load_custom validates; get_boundary returns EPSG:4326
-- **Implement**: schema validation, GADM lookup, custom override loading
-- **Verify**: `make check`
+## Remaining / Future
 
-### T5–T15: See plan file for details
+| Task | Status | Description |
+|------|--------|-------------|
+| T10 | TODO | Integration tests |
+| T12 | TODO | Cross-level validation (sum of children ≈ parent total) |
+| T14 | TODO | Raster clip & export |
+| T25 | TODO | Global country-level rankings (build index without --country filter) |
+| T26 | TODO | Time-series support (add more years to data/{year}/) |
+| T27 | TODO | Fix "Ug and a" display name bug in `_fix_gadm_name` |
