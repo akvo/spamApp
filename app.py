@@ -271,6 +271,11 @@ with tab1:
                 st.error(str(e))
 
     result = st.session_state.get("analysis_result")
+    # Clear stale results if location/variable changed
+    if result is not None and (
+        result.location_name != selected_location or result.variable != variable
+    ):
+        result = None
     if result is None:
         st.info("Select a location in the sidebar and click **Analyze**.")
     else:
@@ -954,6 +959,10 @@ with tab3:
     gc_data = st.session_state.get("gc_result_data")
     gc_crop = st.session_state.get("gc_result_crop")
     gc_lvl = st.session_state.get("gc_result_level")
+
+    # Don't show stale results if inputs have changed
+    if gc_data is not None and (gc_crop != gc_crop_name or gc_lvl != gc_level):
+        gc_data = None
 
     if gc_data is None:
         st.info(
