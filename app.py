@@ -149,6 +149,21 @@ CROP_NAMES = {
 }
 
 
+@st.cache_data(ttl=300)
+def _crops_with_data(country_code: str, admin_level: int) -> list[str]:
+    """Return crop names that have nonzero production in a country."""
+    index_path = INDEX_DIR / f"level_{admin_level}.parquet"
+    if not index_path.exists():
+        return list(CROP_NAMES.values())
+    df = pd.read_parquet(index_path)
+    filtered = df[df["country_code"] == country_code]
+    if "variable" in filtered.columns:
+        filtered = filtered[filtered["variable"] == "P"]
+    nonzero = filtered[filtered["value"] > 0]["crop_code"].unique()
+    names = [CROP_NAMES[c] for c in nonzero if c in CROP_NAMES]
+    return sorted(names) if names else list(CROP_NAMES.values())
+
+
 @st.cache_data(ttl=60)
 def get_index_info(level: int) -> dict:
     """Return available countries and crops from the index."""
@@ -545,8 +560,9 @@ with tab2:
     r1, r2, r3 = st.columns([3, 1, 1])
 
     with r1:
+        available_crops = _crops_with_data(country_code, rank_level)
         crop_name = st.selectbox(
-            "Crop", options=list(CROP_NAMES.values()), key="rank_crop"
+            "Crop", options=available_crops, key="rank_crop"
         )
         crop_code = next(
             code for code, name in CROP_NAMES.items() if name == crop_name
@@ -630,10 +646,17 @@ with tab2:
                 f"top {lvl_desc} in **{selected_location}**."
             )
 
-    elif ranking_df.empty:
-        st.warning(
-            "No data found. The index may not contain "
-            "this crop/level combination."
+    elif ranking_df.empty or (
+        "rank_value" in ranking_df.columns
+        and ranking_df["rank_value"].sum() == 0
+    ) or (
+        "rank_value" not in ranking_df.columns
+        and "production_mt" in ranking_df.columns
+        and ranking_df["production_mt"].sum() == 0
+    ):
+        st.info(
+            f"No {variable.replace('_', ' ')} data found for this "
+            f"crop in the selected region."
         )
     else:
         st.markdown("---")
@@ -887,8 +910,9 @@ with tab3:
     g1, g2, g3 = st.columns([3, 2, 1])
 
     with g1:
+        gc_available = _crops_with_data(country_code, 0)
         gc_crop_name = st.selectbox(
-            "Crop", options=list(CROP_NAMES.values()), key="gc_crop"
+            "Crop", options=gc_available, key="gc_crop"
         )
         gc_crop_code = next(
             code for code, name in CROP_NAMES.items() if name == gc_crop_name
