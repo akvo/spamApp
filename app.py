@@ -291,6 +291,13 @@ _VAR_NAME_TO_CODE = {
 var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 
+# Clear example flag after it's been consumed (two-step: set → consumed → cleared)
+if st.session_state.get("_example_consumed"):
+    st.session_state._example_loaded = False
+    st.session_state._example_consumed = False
+elif st.session_state.get("_example_loaded"):
+    st.session_state._example_consumed = True
+
 # --- Header ---
 st.title("SPAM 2020 Crop Analyzer")
 
@@ -321,8 +328,14 @@ with tab1:
 
     result = st.session_state.get("analysis_result")
     # Clear stale results if location/variable changed
-    if result is not None and (
-        result.location_name != selected_location or result.variable != variable
+    # (but not if loaded from an example button)
+    if (
+        result is not None
+        and not st.session_state.get("_example_loaded")
+        and (
+            result.location_name != selected_location
+            or result.variable != variable
+        )
     ):
         result = None
     if result is None:
@@ -984,7 +997,11 @@ with tab3:
     gc_lvl = st.session_state.get("gc_result_level")
 
     # Don't show stale results if inputs have changed
-    if gc_data is not None and (gc_crop != gc_crop_name or gc_lvl != gc_level):
+    if (
+        gc_data is not None
+        and not st.session_state.get("_example_loaded")
+        and (gc_crop != gc_crop_name or gc_lvl != gc_level)
+    ):
         gc_data = None
 
     if gc_data is None:
@@ -1221,6 +1238,7 @@ with tab4:
         ):
             result = _cached_analyze("India", 0, "production")
             st.session_state.analysis_result = result
+            st.session_state._example_loaded = True
             st.success(
                 "Loaded! Switch to the **Location Analysis** tab."
             )
@@ -1241,6 +1259,7 @@ with tab4:
             st.session_state.ranking_crop = "Rice"
             st.session_state.ranking_title = "Rice — Top States in India"
             st.session_state.ranking_highlight = None
+            st.session_state._example_loaded = True
             st.success(
                 "Loaded! Switch to the **Crop Rankings** tab."
             )
@@ -1261,6 +1280,7 @@ with tab4:
             st.session_state.gc_result_data = crop_idx
             st.session_state.gc_result_crop = "Wheat"
             st.session_state.gc_result_level = 0
+            st.session_state._example_loaded = True
             st.success(
                 "Loaded! Switch to the **Global Comparisons** tab."
             )
