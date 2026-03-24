@@ -910,9 +910,9 @@ with tab3:
     g1, g2, g3 = st.columns([3, 2, 1])
 
     with g1:
-        gc_available = _crops_with_data(country_code, 0)
+        # Global comparisons: show all crops, not filtered by sidebar country
         gc_crop_name = st.selectbox(
-            "Crop", options=gc_available, key="gc_crop"
+            "Crop", options=list(CROP_NAMES.values()), key="gc_crop"
         )
         gc_crop_code = next(
             code for code, name in CROP_NAMES.items() if name == gc_crop_name
@@ -942,9 +942,7 @@ with tab3:
                 crop_idx["variable"] = "P"
                 crop_idx["value"] = crop_idx["production_mt"]
 
-            # Level 1: filter to selected country's states
-            if gc_level == 1:
-                crop_idx = crop_idx[crop_idx["country_code"] == country_code]
+            # No country filter — this is a global comparison
 
             if crop_idx.empty:
                 st.warning("No data found for this crop/level.")
@@ -1050,34 +1048,32 @@ with tab3:
             try:
                 import branca.colormap as cm
                 import folium
+                import geopandas as gpd
                 import numpy as np
                 from streamlit.components.v1 import html as st_html
 
-                name_col = f"NAME_{gc_lvl}"
-                map_cc = country_code if gc_lvl == 1 else None
-
-                # For level 0, load all country boundaries
-                if gc_lvl == 0:
-                    # Merge all cached country boundaries
-                    gdf_parts = []
-                    for cname, ccode in countries.items():
-                        g = _cached_boundary_gdf(ccode, 0)
-                        if g is not None and "COUNTRY" in g.columns:
-                            g = g.copy()
-                            g["_name"] = g["COUNTRY"]
+                # Load all boundaries globally
+                gdf_parts = []
+                for cname, ccode in countries.items():
+                    g = _cached_boundary_gdf(ccode, gc_lvl)
+                    if g is not None:
+                        g = g.copy()
+                        if gc_lvl == 0:
+                            ncol = "COUNTRY" if "COUNTRY" in g.columns else "NAME_0"
+                        else:
+                            ncol = f"NAME_{gc_lvl}"
+                        if ncol in g.columns:
+                            g["_name"] = g[ncol]
                             gdf_parts.append(g[["_name", "geometry"]])
-                    if gdf_parts:
-                        import geopandas as gpd
 
-                        boundary_gdf = gpd.GeoDataFrame(
-                            pd.concat(gdf_parts, ignore_index=True),
-                            crs="EPSG:4326",
-                        )
-                        name_col = "_name"
-                    else:
-                        boundary_gdf = None
+                if gdf_parts:
+                    boundary_gdf = gpd.GeoDataFrame(
+                        pd.concat(gdf_parts, ignore_index=True),
+                        crs="EPSG:4326",
+                    )
+                    name_col = "_name"
                 else:
-                    boundary_gdf = _cached_boundary_gdf(country_code, gc_lvl)
+                    boundary_gdf = None
 
                 if boundary_gdf is not None and name_col in boundary_gdf.columns:
                     map_merge = pivot[["admin_name", prod_col]].copy()
