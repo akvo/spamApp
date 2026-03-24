@@ -149,6 +149,41 @@ CROP_NAMES = {
 }
 
 
+def _make_log_colormap(values_series):
+    """Create a log-scale color function from a pandas Series.
+
+    Returns (color_fn, vmax) where color_fn maps a value to a hex color.
+    Log scale ensures dominant producers (75%) look very different from
+    minor ones (3%), while still showing variation among small values.
+    """
+    import branca.colormap as cm
+    import numpy as np
+
+    nonzero = values_series[values_series > 0]
+    if len(nonzero) == 0:
+        return lambda v: "#f7fcf5", 1
+
+    vmin_log = float(np.log1p(nonzero.min()))
+    vmax_log = float(np.log1p(nonzero.max()))
+    vmax = float(nonzero.max())
+
+    if vmax_log == vmin_log:
+        return lambda v: "#005a32" if v > 0 else "#f7fcf5", vmax
+
+    colormap = cm.LinearColormap(
+        ["#f7fcf5", "#c7e9c0", "#74c476", "#238b45", "#005a32"],
+        vmin=vmin_log,
+        vmax=vmax_log,
+    )
+
+    def color_fn(v):
+        if v <= 0:
+            return "#f7fcf5"
+        return colormap(float(np.log1p(v)))
+
+    return color_fn, vmax
+
+
 @st.cache_data(ttl=300)
 def _crops_with_data(country_code: str, admin_level: int) -> list[str]:
     """Return crop names that have nonzero production in a country."""
@@ -748,7 +783,6 @@ with tab2:
         # Choropleth map
         st.subheader("Map")
         try:
-            import branca.colormap as cm
             import folium
             from streamlit.components.v1 import html as st_html
 
@@ -792,33 +826,7 @@ with tab2:
                 )
                 map_gdf["rank_value"] = map_gdf["rank_value"].fillna(0)
 
-                import numpy as np
-
-                # Use quantile-based coloring to handle skewed distributions
-                values = map_gdf["rank_value"]
-                nonzero = values[values > 0]
-                if len(nonzero) > 2:
-                    # Quantile thresholds for better color spread
-                    q33 = float(np.percentile(nonzero, 33))
-                    q66 = float(np.percentile(nonzero, 66))
-                    vmax = float(nonzero.max())
-
-                    def _color_for(v):
-                        if v <= 0:
-                            return "#f7fcf5"
-                        if v <= q33:
-                            return "#c7e9c0"
-                        if v <= q66:
-                            return "#74c476"
-                        return "#005a32"
-                else:
-                    vmax = float(values.max()) if values.max() > 0 else 1
-                    colormap = cm.LinearColormap(
-                        colors=["#f7fcf5", "#74c476", "#005a32"],
-                        vmin=0,
-                        vmax=vmax,
-                    )
-                    _color_for = lambda v: colormap(v if v else 0)  # noqa: E731
+                _color_for, vmax = _make_log_colormap(map_gdf["rank_value"])
 
                 def style_fn(feature):
                     val = feature["properties"].get("rank_value", 0)
@@ -1055,10 +1063,8 @@ with tab3:
             st.markdown("---")
             st.subheader(f"{gc_crop} Production — Map")
             try:
-                import branca.colormap as cm
                 import folium
                 import geopandas as gpd
-                import numpy as np
                 from streamlit.components.v1 import html as st_html
 
                 # Load all boundaries globally
@@ -1094,26 +1100,7 @@ with tab3:
                     )
                     map_gdf[prod_col] = map_gdf[prod_col].fillna(0)
 
-                    nonzero = map_gdf[prod_col][map_gdf[prod_col] > 0]
-                    vmax = float(nonzero.max()) if len(nonzero) > 0 else 1
-
-                    if len(nonzero) > 2:
-                        q33 = float(np.percentile(nonzero, 33))
-                        q66 = float(np.percentile(nonzero, 66))
-
-                        def _gc_color(v):
-                            if v <= 0:
-                                return "#f7fcf5"
-                            if v <= q33:
-                                return "#c7e9c0"
-                            if v <= q66:
-                                return "#74c476"
-                            return "#005a32"
-                    else:
-                        cmap = cm.LinearColormap(
-                            ["#f7fcf5", "#74c476", "#005a32"], vmin=0, vmax=vmax
-                        )
-                        _gc_color = lambda v: cmap(v if v else 0)  # noqa: E731
+                    _gc_color, vmax = _make_log_colormap(map_gdf[prod_col])
 
                     def gc_style(feature):
                         val = feature["properties"].get(prod_col, 0)
