@@ -1124,7 +1124,18 @@ with tab3:
         st.subheader("Full Comparison Data")
 
         show_pivot = pivot.copy()
-        for c in [prod_col, "Harvested Area (ha)", "Physical Area (ha)"]:
+        # Add global % to production column
+        if prod_col in show_pivot.columns:
+            global_total = show_pivot[prod_col].sum()
+            if global_total > 0:
+                show_pivot[prod_col] = show_pivot[prod_col].apply(
+                    lambda v: f"{v:,.0f} ({v / global_total * 100:.1f}%)"
+                )
+            else:
+                show_pivot[prod_col] = show_pivot[prod_col].apply(
+                    lambda v: f"{v:,.0f}"
+                )
+        for c in ["Harvested Area (ha)", "Physical Area (ha)"]:
             if c in show_pivot.columns:
                 show_pivot[c] = show_pivot[c].apply(lambda v: f"{v:,.0f}")
         if "Yield (t/ha)" in show_pivot.columns:
