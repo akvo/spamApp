@@ -250,9 +250,17 @@ def generate_answer(
     """Retrieve relevant context and generate answer using Claude API."""
     import anthropic
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    # Try streamlit secrets first, then env var
+    try:
+        import streamlit as st
+
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        api_key = ""
     if not api_key:
-        return "Please set ANTHROPIC_API_KEY to use the AI assistant."
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return "Please set ANTHROPIC_API_KEY in .streamlit/secrets.toml."
 
     # Retrieve relevant chunks
     chunks = retrieve(question, top_k=5)

@@ -21,6 +21,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 
+# Secrets
+.streamlit/secrets.toml
+
 # OS
 .DS_Store
 Thumbs.db

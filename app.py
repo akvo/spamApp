@@ -1211,13 +1211,14 @@ with tab4:
     # --- AI Chat (if API key available) ---
     st.markdown("---")
 
-    import os
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    try:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        api_key = ""
 
     if not api_key:
         st.info(
-            "Set the `ANTHROPIC_API_KEY` environment variable to "
+            "Add your API key to `.streamlit/secrets.toml` to "
             "enable the AI assistant for freeform questions."
         )
     else:
