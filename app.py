@@ -1,6 +1,5 @@
 """SPAM 2020 Crop Production Analyzer — Streamlit Dashboard."""
 
-import json
 from pathlib import Path
 
 import altair as alt
@@ -568,8 +567,8 @@ with tab1:
             height=400,
         )
 
-        # Downloads
-        dl1, dl2, _ = st.columns([1, 1, 4])
+        # Download
+        dl1, _ = st.columns([1, 5])
         csv_cols = ["crop_name", "category", "value"]
         for col in ["irrigated", "rainfed"]:
             if col in display_df.columns:
@@ -594,22 +593,7 @@ with tab1:
             f"{result.location_name}_crops.csv",
             "text/csv",
         )
-        json_data = json.dumps(
-            {
-                "location": result.location_name,
-                "variable": result.variable,
-                "crops": display_df[
-                    ["crop_name", "category", "value"]
-                ].to_dict(orient="records"),
-            },
-            indent=2,
-        )
-        dl2.download_button(
-            "Download JSON",
-            json_data,
-            f"{result.location_name}_crops.json",
-            "application/json",
-        )
+
 
 
 # --- Tab 2: Crop Rankings ---
