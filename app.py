@@ -720,10 +720,25 @@ with tab2:
         rank_col_label = f"{rank_var_name} ({rank_unit})"
 
         # Header
-        h1, h2, h3 = st.columns(3)
+        val_col_h = "rank_value" if "rank_value" in ranking_df.columns else "production_mt"
+        if is_rank_yield:
+            region_total = (
+                f"{ranking_df[val_col_h].mean():,.2f} {rank_unit}"
+            )
+            total_label = "Avg Yield"
+        else:
+            total_val = ranking_df[val_col_h].sum()
+            if total_val >= 1_000_000:
+                region_total = f"{total_val / 1_000_000:,.1f} M {rank_unit}"
+            else:
+                region_total = f"{total_val:,.0f} {rank_unit}"
+            total_label = f"Total {rank_var_name}"
+
+        h1, h2, h3, h4 = st.columns(4)
         h1.metric("Crop", ranking_crop_name)
         h2.metric("Level", level_desc)
-        h3.metric("Regions", len(ranking_df))
+        h3.metric(total_label, region_total)
+        h4.metric("Regions", len(ranking_df))
 
         st.markdown("---")
 
