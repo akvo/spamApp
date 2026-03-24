@@ -149,37 +149,32 @@ CROP_NAMES = {
 }
 
 
-def _make_log_colormap(values_series):
-    """Create a log-scale color function from a pandas Series.
+def _make_pct_colormap(values_series):
+    """Create a percentage-based color function from a pandas Series.
 
     Returns (color_fn, vmax) where color_fn maps a value to a hex color.
-    Log scale ensures dominant producers (75%) look very different from
-    minor ones (3%), while still showing variation among small values.
+    Colors by share of total (0-100%) so dominant producers stand out.
     """
     import branca.colormap as cm
-    import numpy as np
 
-    nonzero = values_series[values_series > 0]
-    if len(nonzero) == 0:
+    total = float(values_series.sum())
+    vmax = float(values_series.max()) if total > 0 else 1
+
+    if total == 0:
         return lambda v: "#f7fcf5", 1
 
-    vmin_log = float(np.log1p(nonzero.min()))
-    vmax_log = float(np.log1p(nonzero.max()))
-    vmax = float(nonzero.max())
-
-    if vmax_log == vmin_log:
-        return lambda v: "#005a32" if v > 0 else "#f7fcf5", vmax
-
+    # Color by percentage of total, 0% = lightest, 100% = darkest
     colormap = cm.LinearColormap(
         ["#f7fcf5", "#c7e9c0", "#74c476", "#238b45", "#005a32"],
-        vmin=vmin_log,
-        vmax=vmax_log,
+        vmin=0,
+        vmax=100,
     )
 
     def color_fn(v):
         if v <= 0:
             return "#f7fcf5"
-        return colormap(float(np.log1p(v)))
+        pct = v / total * 100
+        return colormap(min(pct, 100))
 
     return color_fn, vmax
 
@@ -826,7 +821,7 @@ with tab2:
                 )
                 map_gdf["rank_value"] = map_gdf["rank_value"].fillna(0)
 
-                _color_for, vmax = _make_log_colormap(map_gdf["rank_value"])
+                _color_for, vmax = _make_pct_colormap(map_gdf["rank_value"])
 
                 def style_fn(feature):
                     val = feature["properties"].get("rank_value", 0)
@@ -1100,7 +1095,7 @@ with tab3:
                     )
                     map_gdf[prod_col] = map_gdf[prod_col].fillna(0)
 
-                    _gc_color, vmax = _make_log_colormap(map_gdf[prod_col])
+                    _gc_color, vmax = _make_pct_colormap(map_gdf[prod_col])
 
                     def gc_style(feature):
                         val = feature["properties"].get(prod_col, 0)
