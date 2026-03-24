@@ -1199,13 +1199,73 @@ with tab3:
 with tab4:
     from src.faq import FAQ_SECTIONS
 
-    # Demo GIF
-    demo_path = Path("assets/demo/demo.gif")
-    if demo_path.exists():
-        st.subheader("Quick Tour")
-        st.image(str(demo_path), use_container_width=True)
-        st.markdown("")
+    # --- Interactive Examples ---
+    st.subheader("Try It Yourself")
+    st.caption(
+        "Click an example below to load it. Then switch to the "
+        "corresponding tab to see the results."
+    )
 
+    ex1, ex2, ex3 = st.columns(3)
+
+    with ex1:
+        st.markdown("**Location Analysis**")
+        st.markdown(
+            "See what crops India produces, with irrigated vs "
+            "rainfed breakdown."
+        )
+        if st.button(
+            "India — Top Crops",
+            use_container_width=True,
+            key="ex_india",
+        ):
+            result = _cached_analyze("India", 0, "production")
+            st.session_state.analysis_result = result
+            st.success(
+                "Loaded! Switch to the **Location Analysis** tab."
+            )
+
+    with ex2:
+        st.markdown("**Crop Rankings**")
+        st.markdown(
+            "Which Indian states produce the most rice? "
+            "See the ranking with map."
+        )
+        if st.button(
+            "Rice — Top States in India",
+            use_container_width=True,
+            key="ex_rice",
+        ):
+            df = _cached_rank("RICE", 1, 10, "IND", "P")
+            st.session_state.ranking_result = df
+            st.session_state.ranking_crop = "Rice"
+            st.session_state.ranking_title = "Rice — Top States in India"
+            st.session_state.ranking_highlight = None
+            st.success(
+                "Loaded! Switch to the **Crop Rankings** tab."
+            )
+
+    with ex3:
+        st.markdown("**Global Comparisons**")
+        st.markdown(
+            "Compare wheat production, harvested area, and yield "
+            "across all countries."
+        )
+        if st.button(
+            "Wheat — Global View",
+            use_container_width=True,
+            key="ex_wheat",
+        ):
+            idx = pd.read_parquet(INDEX_DIR / "level_0.parquet")
+            crop_idx = idx[idx["crop_code"] == "WHEA"].copy()
+            st.session_state.gc_result_data = crop_idx
+            st.session_state.gc_result_crop = "Wheat"
+            st.session_state.gc_result_level = 0
+            st.success(
+                "Loaded! Switch to the **Global Comparisons** tab."
+            )
+
+    st.markdown("---")
     st.subheader("Frequently Asked Questions")
 
     for section_name, questions in FAQ_SECTIONS.items():
