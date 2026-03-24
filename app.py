@@ -294,6 +294,7 @@ var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 # --- Header ---
 st.title("SPAM  Crop Analyzer")
+st.caption("Explore crop production, area, and yield across 46 crops and 27,000+ regions worldwide")
 
 # --- Tabs ---
 tab1, tab2, tab3, tab4 = st.tabs(
