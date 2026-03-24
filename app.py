@@ -291,12 +291,26 @@ _VAR_NAME_TO_CODE = {
 var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 
-# Clear example flag after it's been consumed (two-step: set → consumed → cleared)
-if st.session_state.get("_example_consumed"):
+# Load pending examples (set by Help tab buttons on previous rerun)
+_pending = st.session_state.pop("_pending_example", None)
+if _pending == "india_production":
+    st.session_state.analysis_result = _cached_analyze("India", 0, "production")
+    st.session_state._example_loaded = True
+elif _pending == "rice_rankings":
+    st.session_state.ranking_result = _cached_rank("RICE", 1, 10, "IND", "P")
+    st.session_state.ranking_crop = "Rice"
+    st.session_state.ranking_title = "Rice — Top States in India"
+    st.session_state.ranking_highlight = None
+    st.session_state._example_loaded = True
+elif _pending == "wheat_global":
+    idx = pd.read_parquet(INDEX_DIR / "level_0.parquet")
+    st.session_state.gc_result_data = idx[idx["crop_code"] == "WHEA"].copy()
+    st.session_state.gc_result_crop = "Wheat"
+    st.session_state.gc_result_level = 0
+    st.session_state._example_loaded = True
+else:
+    # Clear example flag so stale-check resumes
     st.session_state._example_loaded = False
-    st.session_state._example_consumed = False
-elif st.session_state.get("_example_loaded"):
-    st.session_state._example_consumed = True
 
 # --- Header ---
 st.title("SPAM 2020 Crop Analyzer")
@@ -1236,12 +1250,8 @@ with tab4:
             use_container_width=True,
             key="ex_india",
         ):
-            result = _cached_analyze("India", 0, "production")
-            st.session_state.analysis_result = result
-            st.session_state._example_loaded = True
-            st.success(
-                "Loaded! Switch to the **Location Analysis** tab."
-            )
+            st.session_state._pending_example = "india_production"
+            st.rerun()
 
     with ex2:
         st.markdown("**Crop Rankings**")
@@ -1254,15 +1264,8 @@ with tab4:
             use_container_width=True,
             key="ex_rice",
         ):
-            df = _cached_rank("RICE", 1, 10, "IND", "P")
-            st.session_state.ranking_result = df
-            st.session_state.ranking_crop = "Rice"
-            st.session_state.ranking_title = "Rice — Top States in India"
-            st.session_state.ranking_highlight = None
-            st.session_state._example_loaded = True
-            st.success(
-                "Loaded! Switch to the **Crop Rankings** tab."
-            )
+            st.session_state._pending_example = "rice_rankings"
+            st.rerun()
 
     with ex3:
         st.markdown("**Global Comparisons**")
@@ -1275,15 +1278,8 @@ with tab4:
             use_container_width=True,
             key="ex_wheat",
         ):
-            idx = pd.read_parquet(INDEX_DIR / "level_0.parquet")
-            crop_idx = idx[idx["crop_code"] == "WHEA"].copy()
-            st.session_state.gc_result_data = crop_idx
-            st.session_state.gc_result_crop = "Wheat"
-            st.session_state.gc_result_level = 0
-            st.session_state._example_loaded = True
-            st.success(
-                "Loaded! Switch to the **Global Comparisons** tab."
-            )
+            st.session_state._pending_example = "wheat_global"
+            st.rerun()
 
     st.markdown("---")
     st.subheader("Frequently Asked Questions")
