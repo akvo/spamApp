@@ -149,6 +149,19 @@ CROP_NAMES = {
 }
 
 
+def _simplify_gdf(gdf, tolerance=0.05):
+    """Simplify geometries to reduce vertex count for faster map rendering.
+
+    tolerance=0.05 degrees ≈ 5km — invisible at country/state zoom levels
+    but reduces vertices by ~95%.
+    """
+    simplified = gdf.copy()
+    simplified["geometry"] = simplified.geometry.simplify(
+        tolerance, preserve_topology=True
+    )
+    return simplified
+
+
 def _make_pct_colormap(values_series):
     """Create a percentage-based color function with sqrt scaling.
 
@@ -838,6 +851,7 @@ with tab2:
                         "weight": 0.5,
                     }
 
+                map_gdf = _simplify_gdf(map_gdf)
                 bounds = map_gdf.total_bounds
                 m = folium.Map(tiles="cartodbpositron")
 
@@ -1112,6 +1126,7 @@ with tab3:
                             "weight": 0.5,
                         }
 
+                    map_gdf = _simplify_gdf(map_gdf)
                     bounds = map_gdf.total_bounds
                     m = folium.Map(tiles="cartodbpositron")
                     folium.GeoJson(
