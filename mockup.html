@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPAM 2020 Crop Analyzer — Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8faf8; color: #1a2e1a; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 280px; background: #1a3a1a; color: #e8f0e8; padding: 24px 20px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+  .sidebar h1 { font-size: 18px; font-weight: 700; color: #7cdf7c; margin-bottom: 8px; }
+  .sidebar h1 span { font-size: 12px; color: #8aaa8a; display: block; font-weight: 400; margin-top: 4px; }
+  .sidebar label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #8aaa8a; display: block; margin-bottom: 4px; }
+  .sidebar input, .sidebar select { width: 100%; padding: 8px 10px; border: 1px solid #2a5a2a; border-radius: 6px; background: #0f2a0f; color: #e8f0e8; font-size: 14px; }
+  .sidebar input:focus, .sidebar select:focus { outline: none; border-color: #7cdf7c; }
+  .sidebar button { width: 100%; padding: 10px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #2e8b2e; color: white; }
+  .btn-primary:hover { background: #3aa53a; }
+  .btn-secondary { background: #1a4a1a; color: #7cdf7c; border: 1px solid #2a5a2a !important; }
+  .btn-secondary:hover { background: #2a5a2a; }
+  .divider { border-top: 1px solid #2a5a2a; margin: 8px 0; }
+  .sidebar-section { display: flex; flex-direction: column; gap: 10px; }
+
+  /* Mobile hamburger */
+  .sidebar-toggle { display: none; position: fixed; top: 12px; left: 12px; z-index: 1001; background: #1a3a1a; color: #7cdf7c; border: none; border-radius: 6px; padding: 8px 12px; font-size: 20px; cursor: pointer; }
+  .sidebar-overlay { display: none; }
+
+  /* Search dropdown */
+  .search-wrap { position: relative; }
+  .search-results { position: absolute; top: 100%; left: 0; right: 0; background: #0f2a0f; border: 1px solid #2a5a2a; border-top: none; border-radius: 0 0 6px 6px; max-height: 220px; overflow-y: auto; z-index: 100; display: none; }
+  .search-results.open { display: block; }
+  .search-result { padding: 8px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #1a3a1a; }
+  .search-result:hover { background: #1a4a1a; }
+  .search-result .sr-name { color: #e8f0e8; font-weight: 500; }
+  .search-result .sr-level { color: #6a9a6a; font-size: 11px; margin-left: 6px; }
+  .search-result .sr-parent { color: #5a8a5a; font-size: 11px; display: block; margin-top: 2px; }
+
+  /* Main */
+  .main { flex: 1; padding: 24px 32px; overflow-y: auto; min-width: 0; }
+
+  /* Breadcrumb */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5a8a5a; margin-bottom: 16px; flex-wrap: wrap; }
+  .breadcrumb a { color: #2e8b2e; text-decoration: none; cursor: pointer; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { color: #b0c8b0; }
+  .breadcrumb .current { color: #1a3a1a; font-weight: 600; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid #d4e4d4; margin-bottom: 24px; overflow-x: auto; }
+  .tab { padding: 10px 24px; font-size: 14px; font-weight: 600; color: #5a7a5a; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; }
+  .tab.active { color: #1a6a1a; border-bottom-color: #2e8b2e; }
+  .tab:hover { color: #1a6a1a; }
+
+  /* Tab content */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Header bar */
+  .header-bar { background: white; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .header-bar h2 { font-size: 22px; color: #1a3a1a; }
+  .header-stat { text-align: center; }
+  .header-stat .label { font-size: 11px; text-transform: uppercase; color: #7a9a7a; letter-spacing: 0.5px; }
+  .header-stat .value { font-size: 18px; font-weight: 700; color: #1a6a1a; }
+
+  /* Grid layout */
+  .row { display: flex; gap: 20px; margin-bottom: 20px; }
+  .col-60 { flex: 3; min-width: 0; }
+  .col-40 { flex: 2; min-width: 0; }
+
+  /* Cards */
+  .card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .card h3 { font-size: 14px; font-weight: 600; color: #5a7a5a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+
+  /* Bar chart mockup */
+  .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; }
+  .bar-label { width: 120px; font-size: 13px; text-align: right; color: #3a5a3a; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 28px; background: #e8f4e8; border-radius: 6px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, #2e8b2e, #4aad4a); border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; }
+  .bar-value { font-size: 12px; font-weight: 600; color: white; white-space: nowrap; }
+  .bar-value-outside { font-size: 12px; font-weight: 600; color: #3a6a3a; margin-left: 8px; white-space: nowrap; }
+
+  /* Stats cards */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat-card { background: #f0f8f0; border-radius: 8px; padding: 16px; text-align: center; }
+  .stat-card .stat-value { font-size: 22px; font-weight: 700; color: #1a6a1a; word-break: break-word; }
+  .stat-card .stat-label { font-size: 11px; color: #5a8a5a; text-transform: uppercase; margin-top: 4px; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
+  .data-table th { text-align: left; padding: 10px 12px; background: #f0f8f0; color: #3a6a3a; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #d4e4d4; }
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid #e8f0e8; }
+  .data-table tr:hover { background: #f8fcf8; }
+  .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .data-table .drillable { cursor: pointer; color: #2e8b2e; }
+  .data-table .drillable:hover { text-decoration: underline; }
+  .drill-icon { font-size: 11px; color: #8aba8a; margin-left: 4px; }
+
+  /* Download buttons */
+  .download-bar { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; flex-wrap: wrap; }
+  .download-btn { padding: 6px 14px; font-size: 12px; border: 1px solid #c4d8c4; border-radius: 6px; background: white; color: #3a6a3a; cursor: pointer; font-weight: 500; }
+  .download-btn:hover { background: #f0f8f0; }
+
+  /* Map placeholder */
+  .map-placeholder { width: 100%; height: 500px; background: #e8f4e8; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: #5a8a5a; }
+  .map-placeholder svg { width: 64px; height: 64px; fill: #8aba8a; }
+  .map-placeholder .map-label { font-size: 16px; font-weight: 600; }
+  .map-placeholder .map-sub { font-size: 13px; color: #7a9a7a; }
+
+  /* Info banner */
+  .info-banner { background: #e8f4e8; border-left: 3px solid #2e8b2e; border-radius: 0 6px 6px 0; padding: 12px 16px; font-size: 13px; color: #2a5a2a; margin-bottom: 20px; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 1024px) {
+    .row { flex-direction: column; }
+    .bar-label { width: 90px; font-size: 12px; }
+    .header-bar { gap: 16px; }
+    .header-stat .value { font-size: 16px; }
+  }
+
+  @media (max-width: 768px) {
+    .sidebar { position: fixed; left: -300px; top: 0; bottom: 0; z-index: 1000; transition: left 0.3s ease; width: 280px; }
+    .sidebar.open { left: 0; }
+    .sidebar-toggle { display: block; }
+    .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999; }
+    .sidebar-overlay.open { display: block; }
+    .main { padding: 60px 16px 24px; }
+    .tabs { gap: 0; }
+    .tab { padding: 10px 14px; font-size: 13px; }
+    .header-bar { padding: 14px 16px; }
+    .header-bar h2 { font-size: 18px; width: 100%; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .card { padding: 14px; }
+    .bar-label { width: 80px; font-size: 11px; }
+    .map-placeholder { height: 300px; }
+  }
+
+  @media (max-width: 480px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    .header-bar { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .header-stat { text-align: left; }
+    .download-bar { justify-content: stretch; }
+    .download-btn { flex: 1; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Mobile toggle -->
+<button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <h1>SPAM 2020<span>Crop Production Analyzer</span></h1>
+
+  <div class="sidebar-section">
+    <div class="search-wrap">
+      <label>Location</label>
+      <input type="text" id="search-input" value="" placeholder="Search country, state, district..." oninput="toggleSearch()" onfocus="toggleSearch()">
+      <div class="search-results" id="search-results">
+        <div class="search-result" onclick="selectLocation('India', 0)">
+          <span class="sr-name">India</span><span class="sr-level">Country</span>
+        </div>
+        <div class="search-result" onclick="selectLocation('Indiana', 1)">
+          <span class="sr-name">Indiana</span><span class="sr-level">State</span>
+          <span class="sr-parent">United States</span>
+        </div>
+        <div class="search-result" onclick="selectLocation('Indian River', 2)">
+          <span class="sr-name">Indian River</span><span class="sr-level">District</span>
+          <span class="sr-parent">Florida, United States</span>
+        </div>
+        <div class="search-result" onclick="selectLocation('Indonesia', 0)">
+          <span class="sr-name">Indonesia</span><span class="sr-level">Country</span>
+        </div>
+        <div class="search-result" onclick="selectLocation('Indore', 2)">
+          <span class="sr-name">Indore</span><span class="sr-level">District</span>
+          <span class="sr-parent">Madhya Pradesh, India</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <label>Variable</label>
+      <select>
+        <option selected>Production (mt)</option>
+        <option>Harvested Area (ha)</option>
+        <option>Physical Area (ha)</option>
+        <option>Yield (t/ha)</option>
+      </select>
+    </div>
+    <div>
+      <label>Year</label>
+      <select>
+        <option>2020</option>
+      </select>
+    </div>
+    <button class="btn-primary">Analyze</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="sidebar-section">
+    <div>
+      <label>Crop (for Rankings)</label>
+      <select>
+        <option>Maize</option>
+        <option>Wheat</option>
+        <option>Rice</option>
+        <option>Soybean</option>
+        <option>Sugarcane</option>
+        <option>Cotton</option>
+        <option>Potato</option>
+        <option>Banana</option>
+      </select>
+    </div>
+    <div>
+      <label>Top N</label>
+      <input type="number" value="10" min="1" max="50">
+    </div>
+    <button class="btn-secondary">Show Rankings</button>
+  </div>
+</div>
+
+<!-- Main content -->
+<div class="main">
+  <!-- Demo view toggle (mockup only — not in final app) -->
+  <div style="background:#fffbe6; border:1px solid #e6d88a; border-radius:8px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; font-size:13px; color:#8a7a2a; flex-wrap:wrap;">
+    <strong>Mockup demo:</strong>
+    <button onclick="showView('country')" class="download-btn" style="font-size:12px;" id="btn-country">Country view (India)</button>
+    <button onclick="showView('district')" class="download-btn" style="font-size:12px;" id="btn-district">District view (Indore)</button>
+  </div>
+
+  <!-- === COUNTRY VIEW === -->
+  <div id="view-country">
+  <!-- Breadcrumb for drill-down navigation -->
+  <div class="breadcrumb">
+    <a onclick="drillTo('World', -1)">World</a>
+    <span class="sep">/</span>
+    <a onclick="drillTo('India', 0)">India</a>
+    <span class="sep">/</span>
+    <span class="current">All States</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(0)">Location Analysis</div>
+    <div class="tab" onclick="switchTab(1)">Crop Rankings</div>
+    <div class="tab" onclick="switchTab(2)">Map View</div>
+  </div>
+
+  <!-- Tab 1: Location Analysis -->
+  <div class="tab-content active" id="tab-0">
+    <div class="header-bar">
+      <h2>India</h2>
+      <div class="header-stat">
+        <div class="label">Variable</div>
+        <div class="value">Production</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Total</div>
+        <div class="value">1,153,148,400 mt</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Crops with Data</div>
+        <div class="value">44</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-60">
+        <div class="card">
+          <h3>Top 10 Crops — Production (mt)</h3>
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div class="bar-label">Sugarcane</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100%"><span class="bar-value">395,225,664</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Rice</div>
+              <div class="bar-track"><div class="bar-fill" style="width:49%"><span class="bar-value">192,518,912</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Wheat</div>
+              <div class="bar-track"><div class="bar-fill" style="width:27%"><span class="bar-value">108,309,112</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Vegetables</div>
+              <div class="bar-track"><div class="bar-fill" style="width:23%"><span class="bar-value">90,720,688</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Potato</div>
+              <div class="bar-track"><div class="bar-fill" style="width:13%"><span class="bar-value">52,176,816</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Banana</div>
+              <div class="bar-track"><div class="bar-fill" style="width:8%"><span class="bar-value">31,504,310</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Maize</div>
+              <div class="bar-track"><div class="bar-fill" style="width:8%"><span class="bar-value">30,204,598</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Tomato</div>
+              <div class="bar-track"><div class="bar-fill" style="width:5%"><span class="bar-value">20,573,268</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Onion</div>
+              <div class="bar-track"><div class="bar-fill" style="width:5%"></div></div>
+              <span class="bar-value-outside">19,415,822</span>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Cassava</div>
+              <div class="bar-track"><div class="bar-fill" style="width:1.5%"></div></div>
+              <span class="bar-value-outside">4,563,260</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-40">
+        <div class="card">
+          <h3>Summary</h3>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value">1.15B</div>
+              <div class="stat-label">Total Production (mt)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">44</div>
+              <div class="stat-label">Crops with Data</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">Sugarcane</div>
+              <div class="stat-label">Top Crop</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">34.3%</div>
+              <div class="stat-label">Top Crop Share</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <h3>Category Breakdown</h3>
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Cereals</div>
+              <div class="bar-track"><div class="bar-fill" style="width:35%; background: linear-gradient(90deg, #4a8a2e, #6aaa4a);"><span class="bar-value">35%</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Sugar Crops</div>
+              <div class="bar-track"><div class="bar-fill" style="width:34%; background: linear-gradient(90deg, #2e6a8b, #4a8aaa);"><span class="bar-value">34%</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Vegetables</div>
+              <div class="bar-track"><div class="bar-fill" style="width:11%; background: linear-gradient(90deg, #8b6a2e, #aa8a4a);"></div></div>
+              <span class="bar-value-outside">11%</span>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Fruits</div>
+              <div class="bar-track"><div class="bar-fill" style="width:8%; background: linear-gradient(90deg, #8b2e6a, #aa4a8a);"></div></div>
+              <span class="bar-value-outside">8%</span>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Roots</div>
+              <div class="bar-track"><div class="bar-fill" style="width:6%; background: linear-gradient(90deg, #6a2e8b, #8a4aaa);"></div></div>
+              <span class="bar-value-outside">6%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>All Crops Data <span style="font-size:11px; font-weight:400; color:#8a9a8a; text-transform:none;">Click a crop to drill into sub-regions</span></h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Crop</th>
+              <th>Category</th>
+              <th class="num">Production (mt)</th>
+              <th class="num">% of Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td class="drillable" onclick="drillCrop('Sugarcane')">Sugarcane</td><td>Sugar Crops</td><td class="num">395,225,664</td><td class="num">34.3%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>2</td><td class="drillable" onclick="drillCrop('Rice')">Rice</td><td>Cereals</td><td class="num">192,518,912</td><td class="num">16.7%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>3</td><td class="drillable" onclick="drillCrop('Wheat')">Wheat</td><td>Cereals</td><td class="num">108,309,112</td><td class="num">9.4%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>4</td><td class="drillable" onclick="drillCrop('Vegetables')">Vegetables</td><td>Vegetables</td><td class="num">90,720,688</td><td class="num">7.9%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>5</td><td class="drillable" onclick="drillCrop('Potato')">Potato</td><td>Roots & Tubers</td><td class="num">52,176,816</td><td class="num">4.5%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>6</td><td class="drillable" onclick="drillCrop('Banana')">Banana</td><td>Fruits</td><td class="num">31,504,310</td><td class="num">2.7%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>7</td><td class="drillable" onclick="drillCrop('Maize')">Maize</td><td>Cereals</td><td class="num">30,204,598</td><td class="num">2.6%</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>8</td><td class="drillable" onclick="drillCrop('Tomato')">Tomato</td><td>Vegetables</td><td class="num">20,573,268</td><td class="num">1.8%</td><td class="drill-icon">&#9654;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="download-bar">
+        <button class="download-btn">Download CSV</button>
+        <button class="download-btn">Download JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Crop Rankings -->
+  <div class="tab-content" id="tab-1">
+    <div class="header-bar">
+      <h2>Maize — Top Producing States</h2>
+      <div class="header-stat">
+        <div class="label">Region Level</div>
+        <div class="value">States</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Country</div>
+        <div class="value">India</div>
+      </div>
+    </div>
+
+    <div class="info-banner">
+      Rankings use the pre-built index. Run <code>build-index</code> from the CLI to populate.
+    </div>
+
+    <div class="card" style="margin-bottom: 20px;">
+      <h3>Top 10 Regions — Maize Production (mt)</h3>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">Karnataka</div>
+          <div class="bar-track"><div class="bar-fill" style="width:100%"><span class="bar-value">4,394,478</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Madhya Pradesh</div>
+          <div class="bar-track"><div class="bar-fill" style="width:95%"><span class="bar-value">4,180,351</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Bihar</div>
+          <div class="bar-track"><div class="bar-fill" style="width:69%"><span class="bar-value">3,035,258</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Telangana</div>
+          <div class="bar-track"><div class="bar-fill" style="width:60%"><span class="bar-value">2,643,751</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Tamil Nadu</div>
+          <div class="bar-track"><div class="bar-fill" style="width:57%"><span class="bar-value">2,505,120</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Maharashtra</div>
+          <div class="bar-track"><div class="bar-fill" style="width:49%"><span class="bar-value">2,135,730</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Andhra Pradesh</div>
+          <div class="bar-track"><div class="bar-fill" style="width:43%"><span class="bar-value">1,876,758</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">West Bengal</div>
+          <div class="bar-track"><div class="bar-fill" style="width:40%"><span class="bar-value">1,742,242</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Rankings Data <span style="font-size:11px; font-weight:400; color:#8a9a8a; text-transform:none;">Click a region to drill down</span></h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Region</th>
+              <th>Country</th>
+              <th class="num">Production (mt)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td class="drillable" onclick="drillRegion('Karnataka')">Karnataka</td><td>India</td><td class="num">4,394,478</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>2</td><td class="drillable" onclick="drillRegion('Madhya Pradesh')">Madhya Pradesh</td><td>India</td><td class="num">4,180,351</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>3</td><td class="drillable" onclick="drillRegion('Bihar')">Bihar</td><td>India</td><td class="num">3,035,258</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>4</td><td class="drillable" onclick="drillRegion('Telangana')">Telangana</td><td>India</td><td class="num">2,643,751</td><td class="drill-icon">&#9654;</td></tr>
+            <tr><td>5</td><td class="drillable" onclick="drillRegion('Tamil Nadu')">Tamil Nadu</td><td>India</td><td class="num">2,505,120</td><td class="drill-icon">&#9654;</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="download-bar">
+        <button class="download-btn">Download CSV</button>
+        <button class="download-btn">Download JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 3: Map View -->
+  <div class="tab-content" id="tab-2">
+    <div class="header-bar">
+      <h2>Map View — India</h2>
+      <div class="header-stat">
+        <div class="label">Crop</div>
+        <div class="value">Maize</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Variable</div>
+        <div class="value">Production</div>
+      </div>
+    </div>
+
+    <div class="info-banner">
+      Choropleth map shows sub-region production intensity. Click a region to drill down to the next admin level.
+    </div>
+
+    <div class="card">
+      <div class="map-placeholder">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <div class="map-label">Interactive Choropleth Map</div>
+        <div class="map-sub">Sub-regions colored by production intensity</div>
+        <div class="map-sub">Click a region to drill down</div>
+        <div class="map-sub" style="margin-top: 8px;">
+          <span style="display:inline-block;width:16px;height:16px;background:#e8f4e8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span> Low
+          <span style="display:inline-block;width:16px;height:16px;background:#7cdf7c;border:1px solid #ccc;vertical-align:middle;margin: 0 4px;border-radius:2px;"></span> Medium
+          <span style="display:inline-block;width:16px;height:16px;background:#1a6a1a;border:1px solid #ccc;vertical-align:middle;margin: 0 4px;border-radius:2px;"></span> High
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /view-country -->
+
+  <!-- === DISTRICT VIEW === -->
+  <div id="view-district" style="display:none;">
+  <div class="breadcrumb">
+    <a onclick="drillTo('World', -1)">World</a>
+    <span class="sep">/</span>
+    <a onclick="drillTo('India', 0)">India</a>
+    <span class="sep">/</span>
+    <a onclick="drillTo('Madhya Pradesh', 1)">Madhya Pradesh</a>
+    <span class="sep">/</span>
+    <span class="current">Indore</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab2(0)">Location Analysis</div>
+    <div class="tab" onclick="switchTab2(1)">Crop Rankings</div>
+    <div class="tab" onclick="switchTab2(2)">Map View</div>
+  </div>
+
+  <!-- District Tab 1: Location Analysis -->
+  <div class="tab-content active" id="dtab-0">
+    <div class="header-bar">
+      <h2>Indore</h2>
+      <div class="header-stat">
+        <div class="label">District in</div>
+        <div class="value">Madhya Pradesh</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Variable</div>
+        <div class="value">Production</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Total</div>
+        <div class="value">1,243,800 mt</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Crops with Data</div>
+        <div class="value">18</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-60">
+        <div class="card">
+          <h3>Top Crops — Production (mt)</h3>
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div class="bar-label">Soybean</div>
+              <div class="bar-track"><div class="bar-fill" style="width:100%"><span class="bar-value">485,200</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Wheat</div>
+              <div class="bar-track"><div class="bar-fill" style="width:62%"><span class="bar-value">302,400</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Chickpea</div>
+              <div class="bar-track"><div class="bar-fill" style="width:30%"><span class="bar-value">148,600</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Maize</div>
+              <div class="bar-track"><div class="bar-fill" style="width:18%"><span class="bar-value">89,300</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Onion</div>
+              <div class="bar-track"><div class="bar-fill" style="width:12%"><span class="bar-value">58,100</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label">Cotton</div>
+              <div class="bar-track"><div class="bar-fill" style="width:9%"></div></div>
+              <span class="bar-value-outside">45,200</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-40">
+        <div class="card">
+          <h3>Summary</h3>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value">1.24M</div>
+              <div class="stat-label">Total Production (mt)</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">18</div>
+              <div class="stat-label">Crops with Data</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">Soybean</div>
+              <div class="stat-label">Top Crop</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">39.0%</div>
+              <div class="stat-label">Top Crop Share</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <h3>Category Breakdown</h3>
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Oil Crops</div>
+              <div class="bar-track"><div class="bar-fill" style="width:42%; background: linear-gradient(90deg, #4a8a2e, #6aaa4a);"><span class="bar-value">42%</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Cereals</div>
+              <div class="bar-track"><div class="bar-fill" style="width:32%; background: linear-gradient(90deg, #2e6a8b, #4a8aaa);"><span class="bar-value">32%</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Pulses</div>
+              <div class="bar-track"><div class="bar-fill" style="width:14%; background: linear-gradient(90deg, #8b6a2e, #aa8a4a);"><span class="bar-value">14%</span></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Vegetables</div>
+              <div class="bar-track"><div class="bar-fill" style="width:7%; background: linear-gradient(90deg, #8b2e6a, #aa4a8a);"></div></div>
+              <span class="bar-value-outside">7%</span>
+            </div>
+            <div class="bar-row">
+              <div class="bar-label" style="width:100px">Fibres</div>
+              <div class="bar-track"><div class="bar-fill" style="width:4%; background: linear-gradient(90deg, #6a2e8b, #8a4aaa);"></div></div>
+              <span class="bar-value-outside">4%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>All Crops Data</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Crop</th>
+              <th>Category</th>
+              <th class="num">Production (mt)</th>
+              <th class="num">% of Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Soybean</td><td>Oil Crops</td><td class="num">485,200</td><td class="num">39.0%</td></tr>
+            <tr><td>2</td><td>Wheat</td><td>Cereals</td><td class="num">302,400</td><td class="num">24.3%</td></tr>
+            <tr><td>3</td><td>Chickpea</td><td>Pulses</td><td class="num">148,600</td><td class="num">12.0%</td></tr>
+            <tr><td>4</td><td>Maize</td><td>Cereals</td><td class="num">89,300</td><td class="num">7.2%</td></tr>
+            <tr><td>5</td><td>Onion</td><td>Vegetables</td><td class="num">58,100</td><td class="num">4.7%</td></tr>
+            <tr><td>6</td><td>Cotton</td><td>Fibres</td><td class="num">45,200</td><td class="num">3.6%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="download-bar">
+        <button class="download-btn">Download CSV</button>
+        <button class="download-btn">Download JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- District Tab 2: Crop Rankings -->
+  <div class="tab-content" id="dtab-1">
+    <div class="header-bar">
+      <h2>Soybean — Districts in Madhya Pradesh</h2>
+      <div class="header-stat">
+        <div class="label">Region Level</div>
+        <div class="value">Districts</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Indore Rank</div>
+        <div class="value">#3 of 52</div>
+      </div>
+    </div>
+
+    <div class="info-banner">
+      Showing how Indore ranks among other districts in Madhya Pradesh for Soybean production.
+    </div>
+
+    <div class="card" style="margin-bottom: 20px;">
+      <h3>Top Districts — Soybean Production (mt)</h3>
+      <div class="bar-chart">
+        <div class="bar-row">
+          <div class="bar-label">Ujjain</div>
+          <div class="bar-track"><div class="bar-fill" style="width:100%"><span class="bar-value">612,400</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Dewas</div>
+          <div class="bar-track"><div class="bar-fill" style="width:85%"><span class="bar-value">523,100</span></div></div>
+        </div>
+        <div class="bar-row" style="background:#f0f8f0; border-radius:6px; padding:4px 0;">
+          <div class="bar-label" style="font-weight:700; color:#1a6a1a;">Indore</div>
+          <div class="bar-track"><div class="bar-fill" style="width:79%; background: linear-gradient(90deg, #1a6a1a, #2e8b2e);"><span class="bar-value">485,200</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Sehore</div>
+          <div class="bar-track"><div class="bar-fill" style="width:68%"><span class="bar-value">418,900</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Shajapur</div>
+          <div class="bar-track"><div class="bar-fill" style="width:55%"><span class="bar-value">340,200</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Rankings Data</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>District</th>
+              <th class="num">Production (mt)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Ujjain</td><td class="num">612,400</td></tr>
+            <tr><td>2</td><td>Dewas</td><td class="num">523,100</td></tr>
+            <tr style="background:#f0f8f0; font-weight:600;"><td>3</td><td>Indore</td><td class="num">485,200</td></tr>
+            <tr><td>4</td><td>Sehore</td><td class="num">418,900</td></tr>
+            <tr><td>5</td><td>Shajapur</td><td class="num">340,200</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="download-bar">
+        <button class="download-btn">Download CSV</button>
+        <button class="download-btn">Download JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- District Tab 3: Map View -->
+  <div class="tab-content" id="dtab-2">
+    <div class="header-bar">
+      <h2>Map View — Indore</h2>
+      <div class="header-stat">
+        <div class="label">Crop</div>
+        <div class="value">Soybean</div>
+      </div>
+      <div class="header-stat">
+        <div class="label">Variable</div>
+        <div class="value">Production</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="map-placeholder" style="height:400px;">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <div class="map-label">Indore District</div>
+        <div class="map-sub">Highlighted within Madhya Pradesh</div>
+        <div class="map-sub" style="color:#8a9a8a; font-style:italic;">Deepest admin level — no sub-regions to display</div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /view-district -->
+
+</div>
+
+<script>
+function switchTab(index) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === index));
+  document.querySelectorAll('.tab-content').forEach((c, i) => c.classList.toggle('active', i === index));
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+
+function toggleSearch() {
+  const input = document.getElementById('search-input');
+  const results = document.getElementById('search-results');
+  results.classList.toggle('open', input.value.length > 0);
+}
+
+function selectLocation(name, level) {
+  document.getElementById('search-input').value = name;
+  document.getElementById('search-results').classList.remove('open');
+}
+
+// Drill-down stubs (in Streamlit these would trigger re-analysis)
+function drillCrop(cropName) {
+  alert('Drill down: Show ' + cropName + ' production by state in India');
+}
+function drillRegion(regionName) {
+  alert('Drill down: Show all crops in ' + regionName + ' (or districts within ' + regionName + ')');
+}
+function drillTo(name, level) {
+  alert('Navigate to: ' + name + ' (level ' + level + ')');
+}
+
+// View switching (mockup demo only)
+function showView(view) {
+  document.getElementById('view-country').style.display = view === 'country' ? 'block' : 'none';
+  document.getElementById('view-district').style.display = view === 'district' ? 'block' : 'none';
+  document.getElementById('btn-country').style.background = view === 'country' ? '#e8f4e8' : 'white';
+  document.getElementById('btn-district').style.background = view === 'district' ? '#e8f4e8' : 'white';
+}
+
+// District tab switching
+function switchTab2(index) {
+  document.querySelectorAll('#view-district .tab').forEach((t, i) => t.classList.toggle('active', i === index));
+  document.querySelectorAll('#view-district .tab-content').forEach((c, i) => c.classList.toggle('active', i === index));
+}
+
+// Close search on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-wrap')) {
+    document.getElementById('search-results').classList.remove('open');
+  }
+});
+</script>
+</body>
+</html>

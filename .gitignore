@@ -1,11 +1,12 @@
-# Data files (too large for git)
+# Raw SPAM GeoTIFF data (download from mapspam.info)
 data/2020/
-data/index/
-data/boundaries/*.gpkg
-data/boundaries/*.shp
-data/boundaries/*.dbf
-data/boundaries/*.shx
-data/boundaries/*.prj
+
+# Build scripts and logs
+build_*.py
+build_*.sh
+build_*.log
+nohup.out
+.playwright-mcp/
 
 # Python
 __pycache__/

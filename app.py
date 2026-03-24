@@ -67,7 +67,7 @@ def _cached_boundary_gdf(country_code, level):
 
 # --- Page config ---
 st.set_page_config(
-    page_title="SPAM 2020 Crop Analyzer",
+    page_title="SPAM Crop Analyzer",
     page_icon="\U0001f33e",
     layout="wide",
 )
@@ -240,9 +240,7 @@ if not countries:
 
 # --- Sidebar: shared location selector ---
 with st.sidebar:
-    st.markdown("## SPAM 2020")
-    st.caption("Crop Production Analyzer")
-    st.markdown("---")
+    
 
     country_name = st.selectbox("Country", options=list(countries.keys()))
     country_code = countries[country_name]
@@ -295,7 +293,7 @@ var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 
 # --- Header ---
-st.title("SPAM 2020 Crop Analyzer")
+st.title("SPAM  Crop Analyzer")
 
 # --- Tabs ---
 tab1, tab2, tab3, tab4 = st.tabs(
