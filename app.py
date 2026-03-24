@@ -968,10 +968,18 @@ with tab3:
         pivot = pivot.rename(columns=var_rename)
 
         prod_col = "Production (mt)"
+        yield_col = "Yield (t/ha)"
         if prod_col in pivot.columns:
             pivot = pivot.sort_values(prod_col, ascending=False)
         pivot = pivot.reset_index(drop=True)
         pivot.index += 1
+
+        # For yield chart: only show top 20 producers
+        top_producers = set()
+        if prod_col in pivot.columns:
+            top_producers = set(
+                pivot.nlargest(20, prod_col)["admin_name"]
+            )
 
         # --- Three charts side by side ---
         chart_vars = [
@@ -984,7 +992,14 @@ with tab3:
         for col_st, (col_name, col_unit, divisor) in zip(cols, chart_vars):
             with col_st:
                 if col_name in pivot.columns:
-                    chart_df = pivot.nlargest(10, col_name)[
+                    # For yield: filter to top 20 producers first
+                    if col_name == yield_col and top_producers:
+                        eligible = pivot[
+                            pivot["admin_name"].isin(top_producers)
+                        ]
+                    else:
+                        eligible = pivot
+                    chart_df = eligible.nlargest(10, col_name)[
                         ["admin_name", col_name]
                     ].copy()
                     chart_df["chart_val"] = chart_df[col_name] / divisor

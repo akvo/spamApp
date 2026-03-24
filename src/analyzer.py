@@ -280,5 +280,20 @@ def rank_by_crop(
     if "production_mt" not in crop_df.columns:
         crop_df["production_mt"] = crop_df["rank_value"]
 
+    # For yield: only show regions that are top 20 producers
+    # (avoids tiny regions with extreme yields dominating rankings)
+    if variable == "Y" and "variable" in df.columns:
+        prod_df = df[
+            (df["crop_code"] == crop_code) & (df["variable"] == "P")
+        ].copy()
+        if country_code:
+            prod_df = prod_df[prod_df["country_code"] == country_code]
+        if parent_name and "parent_name" in prod_df.columns:
+            prod_df = prod_df[prod_df["parent_name"] == parent_name]
+        top_producers = set(
+            prod_df.nlargest(20, "value")["admin_code"]
+        )
+        crop_df = crop_df[crop_df["admin_code"].isin(top_producers)]
+
     crop_df = crop_df.sort_values("rank_value", ascending=False)
     return crop_df.head(top_n).reset_index(drop=True)
