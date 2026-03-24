@@ -725,7 +725,7 @@ with tab2:
             region_total = (
                 f"{ranking_df[val_col_h].mean():,.2f} {rank_unit}"
             )
-            total_label = "Avg Yield"
+            total_label = "Weighted Avg Yield"
         else:
             total_val = ranking_df[val_col_h].sum()
             if total_val >= 1_000_000:
