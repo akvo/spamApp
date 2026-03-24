@@ -930,13 +930,13 @@ with tab3:
             if crop_idx.empty:
                 st.warning("No data found for this crop/level.")
             else:
-                st.session_state.gc_data = crop_idx
-                st.session_state.gc_crop = gc_crop_name
-                st.session_state.gc_level = gc_level
+                st.session_state.gc_result_data = crop_idx
+                st.session_state.gc_result_crop = gc_crop_name
+                st.session_state.gc_result_level = gc_level
 
-    gc_data = st.session_state.get("gc_data")
-    gc_crop = st.session_state.get("gc_crop")
-    gc_lvl = st.session_state.get("gc_level")
+    gc_data = st.session_state.get("gc_result_data")
+    gc_crop = st.session_state.get("gc_result_crop")
+    gc_lvl = st.session_state.get("gc_result_level")
 
     if gc_data is None:
         st.info(
