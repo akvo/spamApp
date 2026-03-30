@@ -201,11 +201,11 @@ def _make_pct_colormap(values_series):
 
 
 @st.cache_resource
-def _cached_world_boundaries():
-    """Load pre-built simplified world boundaries (level 0)."""
+def _cached_world_boundaries(level=0):
+    """Load pre-built simplified world boundaries."""
     import geopandas as gpd
 
-    path = Path("data/boundaries/world_l0.gpkg")
+    path = Path(f"data/boundaries/world_l{level}.gpkg")
     if path.exists():
         return gpd.read_file(path)
     return None
@@ -1098,33 +1098,11 @@ with tab3:
             st.subheader(f"{gc_crop} Production — Map")
             try:
                 import folium
-                import geopandas as gpd
                 from streamlit.components.v1 import html as st_html
 
-                # Load boundaries
-                if gc_lvl == 0:
-                    # Use pre-built simplified world boundaries
-                    boundary_gdf = _cached_world_boundaries()
-                    name_col = "name"
-                else:
-                    # Level 1: load per-country
-                    gdf_parts = []
-                    for cname, ccode in countries.items():
-                        g = _cached_boundary_gdf(ccode, gc_lvl)
-                        if g is not None:
-                            g = g.copy()
-                            ncol = f"NAME_{gc_lvl}"
-                            if ncol in g.columns:
-                                g["_name"] = g[ncol]
-                                gdf_parts.append(g[["_name", "geometry"]])
-                    if gdf_parts:
-                        boundary_gdf = gpd.GeoDataFrame(
-                            pd.concat(gdf_parts, ignore_index=True),
-                            crs="EPSG:4326",
-                        )
-                    else:
-                        boundary_gdf = None
-                    name_col = "_name"
+                # Use pre-built simplified world boundaries
+                boundary_gdf = _cached_world_boundaries(gc_lvl)
+                name_col = "name"
 
                 if boundary_gdf is not None and name_col in boundary_gdf.columns:
                     map_merge = pivot[["admin_name", prod_col]].copy()
@@ -1147,8 +1125,7 @@ with tab3:
                             "weight": 0.5,
                         }
 
-                    if gc_lvl > 0:
-                        map_gdf = _simplify_gdf(map_gdf, admin_level=gc_lvl)
+                    # Pre-built files are already simplified
                     bounds = map_gdf.total_bounds
                     m = folium.Map(tiles="cartodbpositron")
                     folium.GeoJson(
