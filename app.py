@@ -60,11 +60,20 @@ def _cached_countries():
 
 @st.cache_resource
 def _cached_states(country_code):
+    """Get state names from pre-built world file or GADM cache."""
+    import geopandas as gpd
+
+    world_path = Path("data/boundaries/world_l1.gpkg")
+    if world_path.exists():
+        gdf = gpd.read_file(world_path)
+        states = gdf[gdf["code"] == country_code]["name"].tolist()
+        return sorted(states) if states else get_cached_states(country_code)
     return get_cached_states(country_code)
 
 
 @st.cache_resource
 def _cached_districts(country_code, state_name):
+    """Get district names from GADM cache (no pre-built file for L2)."""
     return get_cached_districts(country_code, state_name)
 
 
