@@ -72,8 +72,24 @@ def _cached_states(country_code):
 
 
 @st.cache_resource
+def _cached_district_lookup():
+    """Load district name lookup (no geometries, 313KB)."""
+    lookup_path = Path("data/boundaries/districts_lookup.parquet")
+    if lookup_path.exists():
+        return pd.read_parquet(lookup_path)
+    return None
+
+
+@st.cache_resource
 def _cached_districts(country_code, state_name):
-    """Get district names from GADM cache (no pre-built file for L2)."""
+    """Get district names from lookup file or GADM cache fallback."""
+    df = _cached_district_lookup()
+    if df is not None:
+        districts = df[(df["code"] == country_code) & (df["state"] == state_name)][
+            "district"
+        ].tolist()
+        if districts:
+            return sorted(districts)
     return get_cached_districts(country_code, state_name)
 
 
