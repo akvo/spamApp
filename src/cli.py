@@ -327,6 +327,7 @@ def add_country_cmd(
                 admin_level=level,
                 output_dir=Path(data_dir) / "index",
                 country_codes=codes,
+                tech_levels=["A", "I", "R"],
                 max_workers=min(parallel, len(codes)),
             )
         except Exception as e:

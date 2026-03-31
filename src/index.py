@@ -45,12 +45,16 @@ def build_index(
     crops: list[str] | None = None,
     country_code: str | None = None,
     variables: list[str] | None = None,
+    tech_levels: list[str] | None = None,
     custom_boundary_dir: Path | None = None,
 ) -> Path:
     """Build or update the parquet index for a given admin level.
 
     Uses batch zonal stats — reads each raster once for ALL boundaries.
     Supports incremental builds — skips already-indexed combos.
+
+    Args:
+        tech_levels: ["A"] for totals only, ["A","I","R"] for full breakdown.
 
     Returns path to the output parquet file.
     """
@@ -64,7 +68,13 @@ def build_index(
     existing_keys = set()
     if output_path.exists():
         existing_df = pd.read_parquet(output_path)
-        if "variable" in existing_df.columns:
+        if "tech_level" in existing_df.columns and "variable" in existing_df.columns:
+            existing_keys = set(
+                existing_df[
+                    ["admin_code", "crop_code", "variable", "tech_level"]
+                ].itertuples(index=False)
+            )
+        elif "variable" in existing_df.columns:
             existing_keys = set(
                 existing_df[["admin_code", "crop_code", "variable"]].itertuples(
                     index=False
@@ -78,6 +88,7 @@ def build_index(
     # Determine what to process
     crop_codes = crops if crops else list(CROPS.keys())
     var_codes = variables if variables else list(VARIABLES.keys())
+    tech_codes = tech_levels if tech_levels else ["A"]
 
     # Load boundaries
     boundaries_gdf = get_all_boundaries(
@@ -112,7 +123,7 @@ def build_index(
             pass
 
     new_rows = []
-    total_combos = len(crop_codes) * len(var_codes)
+    total_combos = len(crop_codes) * len(var_codes) * len(tech_codes)
     combo_done = 0
     t_start = time.time()
 
@@ -123,68 +134,77 @@ def build_index(
 
         for var_code in var_codes:
             if var_code not in zip_paths:
-                combo_done += 1
+                combo_done += len(tech_codes)
                 continue
 
-            combo_done += 1
             var_info = VARIABLES[var_code]
             zip_path = zip_paths[var_code]
 
-            # Check if ALL boundaries for this crop/var are already indexed
-            sample_key = (
-                boundaries_gdf.iloc[0]["admin_code"],
-                crop_code,
-                var_code,
-            )
-            if sample_key in existing_keys:
-                continue
+            for tech in tech_codes:
+                combo_done += 1
 
-            try:
-                vsi_path = get_vsi_path(zip_path, var_code, crop_code, "A")
-            except FileNotFoundError:
-                continue
+                # Check if already indexed
+                sample_key = (
+                    boundaries_gdf.iloc[0]["admin_code"],
+                    crop_code,
+                    var_code,
+                    tech,
+                )
+                # Also check without tech_level for backward compat
+                sample_key_old = (
+                    boundaries_gdf.iloc[0]["admin_code"],
+                    crop_code,
+                    var_code,
+                )
+                if sample_key in existing_keys or sample_key_old in existing_keys:
+                    continue
 
-            # Progress
-            elapsed = time.time() - t_start
-            pct = combo_done / total_combos * 100
-            crop_name = crop_info["name"]
-            var_name = var_info["name"]
-            print(
-                f"  [{label}] {combo_done}/{total_combos} "
-                f"({pct:.0f}%) {crop_name}/{var_name} "
-                f"[{elapsed:.0f}s]",
-                end="\r",
-                flush=True,
-            )
-
-            # Batch compute: one raster read for ALL boundaries
-            if var_code == "Y" and ha_zip:
                 try:
-                    ha_vsi = get_vsi_path(ha_zip, "H", crop_code, "A")
+                    vsi_path = get_vsi_path(zip_path, var_code, crop_code, tech)
                 except FileNotFoundError:
                     continue
-                values = batch_weighted_mean_gdf(vsi_path, ha_vsi, boundaries_gdf)
-            else:
-                values = batch_zonal_stats_gdf(vsi_path, boundaries_gdf)
 
-            for i, (_, boundary) in enumerate(boundaries_gdf.iterrows()):
-                new_rows.append(
-                    {
-                        "admin_name": boundary["admin_name"],
-                        "admin_code": boundary["admin_code"],
-                        "admin_level": admin_level,
-                        "country_code": boundary["country_code"],
-                        "country_name": boundary["country_name"],
-                        "crop_code": crop_code,
-                        "crop_name": crop_info["name"],
-                        "category": crop_info["category"],
-                        "variable": var_code,
-                        "variable_name": var_info["name"],
-                        "unit": var_info["unit"],
-                        "value": values[i],
-                        "production_mt": values[i] if var_code == "P" else 0,
-                    }
+                # Progress
+                elapsed = time.time() - t_start
+                pct = combo_done / total_combos * 100
+                tech_name = {"A": "All", "I": "Irr", "R": "Rain"}.get(tech, tech)
+                print(
+                    f"  [{label}] {combo_done}/{total_combos} "
+                    f"({pct:.0f}%) {crop_info['name']}/{var_info['name']}/{tech_name} "
+                    f"[{elapsed:.0f}s]",
+                    end="\r",
+                    flush=True,
                 )
+
+                # Batch compute
+                if var_code == "Y" and ha_zip:
+                    try:
+                        ha_vsi = get_vsi_path(ha_zip, "H", crop_code, tech)
+                    except FileNotFoundError:
+                        continue
+                    values = batch_weighted_mean_gdf(vsi_path, ha_vsi, boundaries_gdf)
+                else:
+                    values = batch_zonal_stats_gdf(vsi_path, boundaries_gdf)
+
+                for i, (_, boundary) in enumerate(boundaries_gdf.iterrows()):
+                    new_rows.append(
+                        {
+                            "admin_name": boundary["admin_name"],
+                            "admin_code": boundary["admin_code"],
+                            "admin_level": admin_level,
+                            "country_code": boundary["country_code"],
+                            "country_name": boundary["country_name"],
+                            "crop_code": crop_code,
+                            "crop_name": crop_info["name"],
+                            "category": crop_info["category"],
+                            "tech_level": tech,
+                            "variable": var_code,
+                            "variable_name": var_info["name"],
+                            "unit": var_info["unit"],
+                            "value": values[i],
+                            "production_mt": values[i] if var_code == "P" else 0,
+                        }
+                    )
 
     elapsed = time.time() - t_start
     print(
@@ -214,7 +234,7 @@ def build_index(
 
 def _build_single_country(args):
     """Worker function for parallel index building."""
-    data_dir, admin_level, output_dir, year, crops, country_code, variables = args
+    data_dir, admin_level, output_dir, year, crops, country_code, variables, tech_levels = args
 
     # Each country gets its own subdirectory to avoid file conflicts
     country_dir = output_dir / country_code
@@ -228,6 +248,7 @@ def _build_single_country(args):
         crops=crops,
         country_code=country_code,
         variables=variables,
+        tech_levels=tech_levels,
     )
     return country_code, result
 
@@ -240,6 +261,7 @@ def build_index_parallel(
     crops: list[str] | None = None,
     country_codes: list[str] | None = None,
     variables: list[str] | None = None,
+    tech_levels: list[str] | None = None,
     max_workers: int | None = None,
 ) -> Path:
     """Build index for multiple countries in parallel.
@@ -277,7 +299,7 @@ def build_index_parallel(
                 )
 
     args_list = [
-        (data_dir, admin_level, temp_dir, year, crops, cc, variables)
+        (data_dir, admin_level, temp_dir, year, crops, cc, variables, tech_levels)
         for cc in country_codes
     ]
 

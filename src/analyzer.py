@@ -59,36 +59,11 @@ def analyze_location(
     """
     data_dir = Path(data_dir)
 
-    # Try index first for totals (instant)
+    # Try index first (instant if available)
     index_result = _try_index_lookup(
         location, admin_level, variable, data_dir / "index"
     )
     if index_result is not None:
-        # For non-yield: enrich with I/R breakdown from rasters
-        if variable != "yield":
-            try:
-                boundary_gdf = get_boundary(
-                    location, admin_level, custom_dir=custom_boundary_dir
-                )
-                geometry = boundary_gdf.union_all()
-                zip_path = _find_zip(data_dir, year, variable)
-
-                # Only fetch I and R for the top crops (not all 46)
-                top_codes = (
-                    index_result.crop_data.nlargest(15, "value")["crop_code"].tolist()
-                )
-                ir_data = compute_all_crops(
-                    zip_path,
-                    geometry,
-                    crops=top_codes,
-                    tech_levels=["I", "R"],
-                )
-                # Merge I/R rows with the existing A rows
-                index_result.crop_data = pd.concat(
-                    [index_result.crop_data, ir_data], ignore_index=True
-                )
-            except Exception:
-                pass  # If raster read fails, just show A-only (no stacked bars)
         return index_result
 
     # Get boundary
@@ -223,26 +198,34 @@ def _try_index_lookup(
     # Build crop_data DataFrame matching the on-the-fly format
     from src.crops import TECH_LEVELS
 
+    has_tech = "tech_level" in location_df.columns
+
     crop_data = pd.DataFrame(
         {
             "crop_code": location_df["crop_code"].values,
             "crop_name": location_df["crop_name"].values,
             "category": location_df["category"].values,
-            "tech_level": "A",
-            "tech_name": TECH_LEVELS.get("A", "All"),
+            "tech_level": location_df["tech_level"].values if has_tech else "A",
+            "tech_name": (
+                location_df["tech_level"].map(TECH_LEVELS).values
+                if has_tech
+                else TECH_LEVELS.get("A", "All")
+            ),
             "value": location_df["value"].values
             if "value" in location_df.columns
             else location_df["production_mt"].values,
         }
     )
 
+    # Compute totals from "A" rows only
+    a_data = crop_data[crop_data["tech_level"] == "A"]
     is_yield = variable == "yield"
     if is_yield:
-        total = crop_data["value"].mean() if len(crop_data) > 0 else 0.0
+        total = a_data["value"].mean() if len(a_data) > 0 else 0.0
     else:
-        total = float(crop_data["value"].sum())
+        total = float(a_data["value"].sum())
 
-    top_df = crop_data.nlargest(50, "value")
+    top_df = a_data.nlargest(50, "value")
     top_crops = list(zip(top_df["crop_name"], top_df["value"]))
 
     return AnalysisResult(
