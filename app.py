@@ -243,16 +243,28 @@ def _cached_world_boundaries(level=0):
     return None
 
 
-@st.cache_data(ttl=300)
-def _crops_with_data(country_code: str, admin_level: int) -> list[str]:
-    """Return crop names that have nonzero production in a country."""
+@st.cache_resource
+def _load_index_light(admin_level: int):
+    """Load only the columns needed for crop filtering (much smaller read)."""
     index_path = INDEX_DIR / f"level_{admin_level}.parquet"
     if not index_path.exists():
+        return None
+    cols = ["country_code", "crop_code", "value"]
+    if admin_level >= 0:
+        try:
+            df = pd.read_parquet(index_path, columns=cols + ["variable"])
+            df = df[df["variable"] == "P"]
+        except Exception:
+            df = pd.read_parquet(index_path, columns=cols)
+    return df
+
+
+def _crops_with_data(country_code: str, admin_level: int) -> list[str]:
+    """Return crop names that have nonzero production in a country."""
+    df = _load_index_light(admin_level)
+    if df is None:
         return list(CROP_NAMES.values())
-    df = pd.read_parquet(index_path)
     filtered = df[df["country_code"] == country_code]
-    if "variable" in filtered.columns:
-        filtered = filtered[filtered["variable"] == "P"]
     nonzero = filtered[filtered["value"] > 0]["crop_code"].unique()
     names = [CROP_NAMES[c] for c in nonzero if c in CROP_NAMES]
     return sorted(names) if names else list(CROP_NAMES.values())
