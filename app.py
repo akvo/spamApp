@@ -665,10 +665,10 @@ with tab2:
 
     # Determine what to show based on sidebar selection
     if is_deepest:
-        # At district level: show comparison among sibling districts
+        # At district level: show comparison among sibling districts in same state
         level_desc = "Districts"
         rank_title = (
-            f"{crop_name} — {selected_location} vs other districts"
+            f"{crop_name} — {selected_location} vs other districts in {state_name}"
         )
     else:
         child_name = {0: "States", 1: "Districts"}[selected_level]
@@ -677,9 +677,8 @@ with tab2:
 
     if rank_btn:
         try:
-            # If a state is selected, fetch all districts for the country
-            # then filter to the state BEFORE applying top_n
-            if selected_level == 1 and rank_level == 2:
+            # If state or district selected, filter districts to that state
+            if (selected_level == 1 or is_deepest) and rank_level == 2:
                 df = _cached_rank(
                     crop_code, rank_level, 9999, country_code, var_code
                 )
