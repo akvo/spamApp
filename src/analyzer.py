@@ -59,11 +59,36 @@ def analyze_location(
     """
     data_dir = Path(data_dir)
 
-    # Try index first (instant if available)
+    # Try index first for totals (instant)
     index_result = _try_index_lookup(
         location, admin_level, variable, data_dir / "index"
     )
     if index_result is not None:
+        # For non-yield: enrich with I/R breakdown from rasters
+        if variable != "yield":
+            try:
+                boundary_gdf = get_boundary(
+                    location, admin_level, custom_dir=custom_boundary_dir
+                )
+                geometry = boundary_gdf.union_all()
+                zip_path = _find_zip(data_dir, year, variable)
+
+                # Only fetch I and R for the top crops (not all 46)
+                top_codes = (
+                    index_result.crop_data.nlargest(15, "value")["crop_code"].tolist()
+                )
+                ir_data = compute_all_crops(
+                    zip_path,
+                    geometry,
+                    crops=top_codes,
+                    tech_levels=["I", "R"],
+                )
+                # Merge I/R rows with the existing A rows
+                index_result.crop_data = pd.concat(
+                    [index_result.crop_data, ir_data], ignore_index=True
+                )
+            except Exception:
+                pass  # If raster read fails, just show A-only (no stacked bars)
         return index_result
 
     # Get boundary
