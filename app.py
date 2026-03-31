@@ -48,6 +48,13 @@ def _cached_rank(crop_code, admin_level, top_n, country_code=None, variable="P")
 
 @st.cache_resource
 def _cached_countries():
+    """Get country names from pre-built world file (fast) or GADM cache (slow fallback)."""
+    import geopandas as gpd
+
+    world_path = Path("data/boundaries/world_l0.gpkg")
+    if world_path.exists():
+        gdf = gpd.read_file(world_path)
+        return dict(sorted(zip(gdf["name"], gdf["code"])))
     return get_cached_country_names()
 
 
