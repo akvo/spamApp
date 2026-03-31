@@ -279,6 +279,84 @@ def init_boundaries_cmd(
     console.print(f"[green]Done:[/green] {len(cached)} layers in {cache}")
 
 
+@app.command(name="add-country")
+def add_country_cmd(
+    country: Annotated[
+        list[str],
+        typer.Option("--country", "-c", help="ISO3 country code(s)"),
+    ],
+    data_dir: Annotated[
+        str, typer.Option("--data", help="Path to data directory")
+    ] = "data",
+    parallel: Annotated[
+        int, typer.Option("--parallel", "-j", help="Parallel workers")
+    ] = 4,
+) -> None:
+    """Add new country(s): download boundaries, build indexes, update lookups.
+
+    This is the single command to run when adding new countries.
+    It handles all 7 steps automatically.
+    """
+    import time
+
+    from src.boundaries import fetch_and_cache
+    from src.prebuild import rebuild_all
+
+    codes = [c.upper() for c in country]
+    start = time.time()
+
+    # Step 1: Download GADM boundaries
+    console.print(f"[bold]Step 1/4:[/bold] Downloading boundaries for {codes}...")
+    for code in codes:
+        for level in [0, 1, 2]:
+            try:
+                fetch_and_cache(code, level)
+                console.print(f"  {code} level {level} cached")
+            except Exception as e:
+                console.print(f"  [yellow]{code} level {level}: {e}[/yellow]")
+
+    # Step 2: Build indexes for all levels
+    console.print("[bold]Step 2/4:[/bold] Building indexes...")
+    from src.index import build_index_parallel
+
+    for level in [0, 1, 2]:
+        console.print(f"  Level {level}...")
+        try:
+            build_index_parallel(
+                data_dir=Path(data_dir),
+                admin_level=level,
+                output_dir=Path(data_dir) / "index",
+                country_codes=codes,
+                max_workers=min(parallel, len(codes)),
+            )
+        except Exception as e:
+            console.print(f"  [yellow]Level {level}: {e}[/yellow]")
+
+    # Step 3: Rebuild pre-built lookup files
+    console.print("[bold]Step 3/4:[/bold] Rebuilding lookup files...")
+    rebuild_all()
+
+    # Step 4: Summary
+    elapsed = time.time() - start
+    console.print(
+        f"\n[green]Done![/green] Added {len(codes)} country(s) in {elapsed:.0f}s."
+    )
+    console.print(
+        "Restart the Streamlit app to pick up the new data."
+    )
+
+
+@app.command(name="rebuild-lookups")
+def rebuild_lookups_cmd() -> None:
+    """Rebuild all pre-built lookup files (world boundaries, district names).
+
+    Run this after manually modifying the GADM cache.
+    """
+    from src.prebuild import rebuild_all
+
+    rebuild_all()
+
+
 @app.command(name="build-knowledge")
 def build_knowledge_cmd() -> None:
     """Build the RAG knowledge base: scrape MapSPAM site + index all docs."""
