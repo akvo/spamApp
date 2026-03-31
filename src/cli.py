@@ -125,11 +125,15 @@ def build_index_cmd(
     parallel: Annotated[
         int, typer.Option("--parallel", "-j", help="Parallel workers (0=sequential)")
     ] = 0,
+    with_ir: Annotated[
+        bool, typer.Option("--with-ir", help="Include Irrigated and Rainfed tech levels")
+    ] = False,
 ) -> None:
     """Build the production index. Use --parallel for multi-country runs."""
     import time
 
     crops_list = [c.upper() for c in crop] if crop else None
+    tech = ["A", "I", "R"] if with_ir else None
     start = time.time()
 
     if parallel > 0 and (country is None or len(country) > 1):
@@ -148,6 +152,7 @@ def build_index_cmd(
                 year=year,
                 crops=crops_list,
                 country_codes=codes,
+                tech_levels=tech,
                 max_workers=parallel,
             )
             elapsed = time.time() - start
@@ -174,6 +179,7 @@ def build_index_cmd(
                 year=year,
                 crops=crops_list,
                 country_code=cc,
+                tech_levels=tech,
             )
             elapsed = time.time() - start
             console.print(
