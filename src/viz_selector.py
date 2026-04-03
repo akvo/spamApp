@@ -104,19 +104,45 @@ def _render_bar(
         if df[x_col].max() < 100:
             fmt = ",.2f"
 
-        chart = (
+        # Detect percentage columns
+        pct_keywords = ("pct", "share", "percent")
+        pct_cols = [
+            c for c in num_cols
+            if any(k in c.lower() for k in pct_keywords)
+        ]
+
+        tooltips = [
+            alt.Tooltip(f"{y_col}:N"),
+            alt.Tooltip(f"{x_col}:Q", format=fmt),
+        ]
+        for pc in pct_cols:
+            tooltips.append(alt.Tooltip(f"{pc}:Q", title="Share (%)", format=".1f"))
+
+        bars = (
             alt.Chart(df)
             .mark_bar(cornerRadiusEnd=3, color="#2e8b2e")
             .encode(
                 x=alt.X(f"{x_col}:Q", title=x_title),
                 y=alt.Y(f"{y_col}:N", sort="-x", title=""),
-                tooltip=[
-                    alt.Tooltip(f"{y_col}:N"),
-                    alt.Tooltip(f"{x_col}:Q", format=fmt),
-                ],
+                tooltip=tooltips,
             )
-            .properties(height=max(300, len(df) * 30))
         )
+
+        # Add percentage text labels on bars if available
+        if pct_cols:
+            pc = pct_cols[0]
+            text = (
+                alt.Chart(df)
+                .mark_text(align="left", dx=4, fontSize=11, color="#333")
+                .encode(
+                    x=alt.X(f"{x_col}:Q"),
+                    y=alt.Y(f"{y_col}:N", sort="-x"),
+                    text=alt.Text(f"{pc}:Q", format=".1f"),
+                )
+            )
+            chart = (bars + text).properties(height=max(300, len(df) * 30))
+        else:
+            chart = bars.properties(height=max(300, len(df) * 30))
 
     st.altair_chart(chart, use_container_width=True)
 
