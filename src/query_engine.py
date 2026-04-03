@@ -61,11 +61,18 @@ SCHEMA_PROMPT += """
 1. For Production (P), Harvested Area (H), Physical Area (A): use SUM for aggregation
 2. For Yield (Y): the value column already has weighted averages per location.
    - For single-location yield: just use the value directly
-   - For ranking yield across locations: ORDER BY value DESC
-   - For averaging yield across multiple locations: you MUST weight by harvested area:
+   - CRITICAL: For ranking yield across locations, you MUST filter to meaningful producers:
+     JOIN with harvested area (variable='H') and require h.value >= 5000 (hectares).
+     This prevents tiny regions with inflated yields from dominating.
+     Always use this pattern for yield rankings:
+     SELECT y.admin_name, y.value AS yield_tha
+     FROM [table] y JOIN [table] h ON y.admin_code = h.admin_code AND y.crop_code = h.crop_code
+     WHERE y.crop_code='...' AND y.variable='Y' AND h.variable='H' AND h.value >= 5000
+     ORDER BY y.value DESC LIMIT 10
+   - For averaging yield across multiple locations: weight by harvested area:
      SUM(y.value * h.value) / NULLIF(SUM(h.value), 0)
-     where y is the yield row and h is the harvested area row for the same crop/location
    - NEVER use AVG(value) or SUM(value) for yield
+   - NEVER rank yield without the harvested area >= 5000 filter
 3. Default to variable='P' (Production) and tech_level='A' (All systems) unless specified
 4. Use the appropriate table: countries for country-level, states for state-level, districts for district-level
 5. Always include LIMIT (default 10 if not specified, minimum 5 for rankings)
