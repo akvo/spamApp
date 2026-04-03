@@ -1234,98 +1234,69 @@ with tab3:
 # --- Tab: Ask Data (Conversational BI) ---
 with tab_ask:
     st.subheader("Ask Data")
-    st.caption(
-        "Ask questions about crop production in natural language. "
-        "Examples: *Top 5 wheat producing countries*, "
-        "*Compare rice yield between India and China*"
-    )
+
+    # Input area pinned at top
+    ask_col1, ask_col2 = st.columns([5, 1])
+    with ask_col1:
+        ask_input = st.text_input(
+            "Question",
+            placeholder="e.g. Top 5 wheat producing countries",
+            key="ask_input",
+            label_visibility="collapsed",
+        )
+    with ask_col2:
+        ask_btn = st.button("Ask", type="primary", use_container_width=True)
 
     # Suggested queries
     suggestions = [
         "Top 5 wheat producing countries",
-        "Show crops in Kenya by production",
-        "Compare rice yield between India and China",
-        "What percentage of world maize does Brazil produce?",
+        "Show crops in Kenya",
+        "Compare rice yield: India vs China",
+        "World maize share by country",
     ]
     sugg_cols = st.columns(len(suggestions))
     for i, sugg in enumerate(suggestions):
-        if sugg_cols[i].button(sugg, key=f"sugg_{i}", use_container_width=True):
-            st.session_state._ask_query = sugg
+        if sugg_cols[i].button(
+            sugg, key=f"sugg_{i}", use_container_width=True
+        ):
+            st.session_state._ask_pending = sugg
+            st.rerun()
 
-    # Chat history
+    # Handle query
     if "ask_history" not in st.session_state:
         st.session_state.ask_history = []
 
-    # Display history
-    for msg in st.session_state.ask_history:
-        with st.chat_message(msg["role"]):
-            if msg["role"] == "assistant" and "viz" in msg:
-                from src.viz_selector import render_result
-
-                render_result(
-                    msg["viz"]["title"],
-                    msg["viz"]["viz_hint"],
-                    msg["viz"]["data"],
-                )
-                if msg.get("sql"):
-                    with st.expander("View SQL"):
-                        st.code(msg["sql"], language="sql")
-            else:
-                st.markdown(msg["content"])
-
-    # Handle suggested query click
-    pending_query = st.session_state.pop("_ask_query", None)
-
-    # Chat input
-    prompt = st.chat_input("Ask about crop production data...")
-    query = pending_query or prompt
+    pending = st.session_state.pop("_ask_pending", None)
+    query = pending or (ask_input if ask_btn else None)
 
     if query:
-        # Show user message
-        st.session_state.ask_history.append(
-            {"role": "user", "content": query}
-        )
-        with st.chat_message("user"):
-            st.markdown(query)
+        with st.spinner("Analyzing..."):
+            from src.query_engine import ask_data
 
-        # Generate and execute
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
-                from src.query_engine import ask_data
+            result = ask_data(query)
 
-                result = ask_data(query)
+        entry = {"query": query, "result": result}
+        st.session_state.ask_history.insert(0, entry)  # newest first
 
-            if not result.success:
-                st.error(result.error)
-                st.session_state.ask_history.append(
-                    {"role": "assistant", "content": f"Error: {result.error}"}
-                )
-            elif result.data.empty:
-                st.info(result.message or "No data found.")
-                st.session_state.ask_history.append(
-                    {"role": "assistant", "content": result.message}
-                )
-            else:
-                from src.viz_selector import render_result
+    # Display results — latest first
+    for entry in st.session_state.ask_history:
+        q = entry["query"]
+        r = entry["result"]
 
-                render_result(result.title, result.viz_hint, result.data)
+        st.markdown("---")
+        st.markdown(f"**Q:** {q}")
 
-                if result.sql:
-                    with st.expander("View SQL"):
-                        st.code(result.sql, language="sql")
+        if not r.success:
+            st.error(r.error)
+        elif r.data.empty:
+            st.info(r.message or "No data found.")
+        else:
+            from src.viz_selector import render_result
 
-                st.session_state.ask_history.append(
-                    {
-                        "role": "assistant",
-                        "content": result.title,
-                        "sql": result.sql,
-                        "viz": {
-                            "title": result.title,
-                            "viz_hint": result.viz_hint,
-                            "data": result.data,
-                        },
-                    }
-                )
+            render_result(r.title, r.viz_hint, r.data)
+
+            with st.expander("View SQL"):
+                st.code(r.sql, language="sql")
 
 
 # --- Tab: Help & FAQ ---
