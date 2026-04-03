@@ -80,13 +80,18 @@ SCHEMA_PROMPT += """
     - value AS yield_tha (for yield)
     - value AS physical_area_ha (for physical area)
 
+## Unclear or Invalid Queries
+If the user's input is gibberish, unrelated to crop data, or too vague to generate SQL,
+return: {"intent":"error","sql":"","title":"","viz_hint":"","error":"I couldn't understand that question. Try asking about crop production, harvested area, or yield for specific countries or regions."}
+
 ## Response Format
 Return ONLY a JSON object (no markdown, no explanation):
 {
-  "intent": "ranking|comparison|breakdown|single_value|general",
+  "intent": "ranking|comparison|breakdown|single_value|error",
   "sql": "SELECT ...",
   "title": "Short descriptive title for the chart",
-  "viz_hint": "bar|grouped_bar|stacked_bar|metric|table"
+  "viz_hint": "bar|grouped_bar|stacked_bar|metric|table",
+  "error": "" (only for intent=error)
 }
 """
 
@@ -253,7 +258,7 @@ def ask_data(
     # Step 1: Generate SQL via LLM
     llm_result = _generate_sql(user_query, chat_history)
 
-    if "error" in llm_result:
+    if "error" in llm_result and llm_result.get("intent") != "error":
         return QueryResult(
             success=False,
             error=llm_result["error"],
@@ -264,10 +269,11 @@ def ask_data(
     title = llm_result.get("title", "")
     viz_hint = llm_result.get("viz_hint", "table")
 
-    if not sql:
+    # Handle error intent (gibberish, unrelated, too vague)
+    if intent == "error" or not sql:
         return QueryResult(
             success=False,
-            error="No SQL generated.",
+            error=llm_result.get("error", "I couldn't understand that question. Try asking about crop production, area, or yield for specific countries or regions."),
         )
 
     # Step 2: Validate SQL
