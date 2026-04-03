@@ -100,6 +100,7 @@ Return ONLY a JSON object (no markdown, no explanation):
   "intent": "ranking|comparison|breakdown|single_value|error",
   "sql": "SELECT ...",
   "title": "Short descriptive title for the chart",
+  "description": "One sentence explaining what the data shows, including variable, unit, level, and any filters applied. Example: 'Showing top 10 states in India by rice production in metric tonnes, all farming systems combined.'",
   "viz_hint": "bar|grouped_bar|stacked_bar|metric|table",
   "error": "" (only for intent=error)
 }
@@ -150,6 +151,7 @@ class QueryResult:
     intent: str = ""
     sql: str = ""
     title: str = ""
+    description: str = ""
     viz_hint: str = "table"
     data: pd.DataFrame = field(default_factory=pd.DataFrame)
     error: str = ""
@@ -278,6 +280,7 @@ def ask_data(
     sql = llm_result.get("sql", "")
     intent = llm_result.get("intent", "")
     title = llm_result.get("title", "")
+    description = llm_result.get("description", "")
     viz_hint = llm_result.get("viz_hint", "table")
 
     # Handle error intent (gibberish, unrelated, too vague)
@@ -330,6 +333,7 @@ def ask_data(
             intent=intent,
             sql=sql,
             title=title,
+            description=description,
             viz_hint=viz_hint,
             data=pd.DataFrame(),
             message="No data found. Try a different crop, location, or variable.",
@@ -340,6 +344,7 @@ def ask_data(
         intent=intent,
         sql=sql,
         title=title,
+        description=description,
         viz_hint=viz_hint,
         data=df,
     )

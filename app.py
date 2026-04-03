@@ -1298,6 +1298,9 @@ with tab_ask:
 
             render_result(r.title, r.viz_hint, r.data)
 
+            if r.description:
+                st.caption(r.description)
+
             with st.expander("View SQL"):
                 st.code(r.sql, language="sql")
 
