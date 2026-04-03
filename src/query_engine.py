@@ -81,7 +81,10 @@ SCHEMA_PROMPT += """
 7. crop_name values are proper case: "Wheat", "Rice", "Maize" (not lowercase)
 8. admin_name values may have no spaces (e.g., "MadhyaPradesh", "WestBengal")
 9. Always include admin_name or crop_name in SELECT so the chart shows labels
-10. Always alias the value column with the unit. Examples:
+10. For "where in [country]" questions, default to the states table (level 1),
+    not districts. Only use districts if the user specifically mentions districts
+    or asks about a specific state's sub-regions.
+11. Always alias the value column with the unit. Examples:
     - value AS production_mt (for production)
     - value AS harvested_area_ha (for harvested area)
     - value AS yield_tha (for yield)
@@ -198,6 +201,7 @@ def _generate_sql(user_query: str, chat_history: list | None = None) -> dict:
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=512,
+        temperature=0,
         system=SCHEMA_PROMPT,
         messages=messages,
     )
