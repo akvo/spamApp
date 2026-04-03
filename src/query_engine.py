@@ -188,7 +188,12 @@ def _generate_sql(user_query: str, chat_history: list | None = None) -> dict:
     import json
 
     try:
-        return json.loads(response.content[0].text)
+        text = response.content[0].text.strip()
+        # Strip markdown code fences if present
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            text = text.rsplit("```", 1)[0].strip()
+        return json.loads(text)
     except (json.JSONDecodeError, IndexError):
         return {"error": f"Failed to parse LLM response: {response.content[0].text}"}
 
