@@ -1296,10 +1296,7 @@ with tab_ask:
         else:
             from src.viz_selector import render_result
 
-            render_result(r.title, r.viz_hint, r.data)
-
-            if r.description:
-                st.caption(r.description)
+            render_result(r.title, r.viz_hint, r.data, r.description)
 
             with st.expander("View SQL"):
                 st.code(r.sql, language="sql")

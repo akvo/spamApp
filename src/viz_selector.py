@@ -9,13 +9,15 @@ import pandas as pd
 import streamlit as st
 
 
-def render_result(title: str, viz_hint: str, df: pd.DataFrame):
+def render_result(title: str, viz_hint: str, df: pd.DataFrame, description: str = ""):
     """Render a QueryResult as an appropriate visualization."""
     if df.empty:
         st.info("No data to display.")
         return
 
     st.subheader(title)
+    if description:
+        st.caption(description)
 
     # Determine numeric and text columns
     num_cols = df.select_dtypes(include="number").columns.tolist()
