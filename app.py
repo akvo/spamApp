@@ -352,8 +352,8 @@ st.title("SPAM  Crop Analyzer")
 st.caption("Explore crop production, area, and yield across 46 crops and 27,000+ regions worldwide")
 
 # --- Tabs ---
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Location Analysis", "Crop Rankings", "Global Comparisons", "Help & FAQ"]
+tab1, tab2, tab3, tab_ask, tab4 = st.tabs(
+    ["Location Analysis", "Crop Rankings", "Global Comparisons", "Ask Data", "Help & FAQ"]
 )
 
 
@@ -1231,7 +1231,104 @@ with tab3:
         )
 
 
-# --- Tab 4: Help & FAQ ---
+# --- Tab: Ask Data (Conversational BI) ---
+with tab_ask:
+    st.subheader("Ask Data")
+    st.caption(
+        "Ask questions about crop production in natural language. "
+        "Examples: *Top 5 wheat producing countries*, "
+        "*Compare rice yield between India and China*"
+    )
+
+    # Suggested queries
+    suggestions = [
+        "Top 5 wheat producing countries",
+        "Show crops in Kenya by production",
+        "Compare rice yield between India and China",
+        "What percentage of world maize does Brazil produce?",
+    ]
+    sugg_cols = st.columns(len(suggestions))
+    for i, sugg in enumerate(suggestions):
+        if sugg_cols[i].button(sugg, key=f"sugg_{i}", use_container_width=True):
+            st.session_state._ask_query = sugg
+
+    # Chat history
+    if "ask_history" not in st.session_state:
+        st.session_state.ask_history = []
+
+    # Display history
+    for msg in st.session_state.ask_history:
+        with st.chat_message(msg["role"]):
+            if msg["role"] == "assistant" and "viz" in msg:
+                from src.viz_selector import render_result
+
+                render_result(
+                    msg["viz"]["title"],
+                    msg["viz"]["viz_hint"],
+                    msg["viz"]["data"],
+                )
+                if msg.get("sql"):
+                    with st.expander("View SQL"):
+                        st.code(msg["sql"], language="sql")
+            else:
+                st.markdown(msg["content"])
+
+    # Handle suggested query click
+    pending_query = st.session_state.pop("_ask_query", None)
+
+    # Chat input
+    prompt = st.chat_input("Ask about crop production data...")
+    query = pending_query or prompt
+
+    if query:
+        # Show user message
+        st.session_state.ask_history.append(
+            {"role": "user", "content": query}
+        )
+        with st.chat_message("user"):
+            st.markdown(query)
+
+        # Generate and execute
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing..."):
+                from src.query_engine import ask_data
+
+                result = ask_data(query)
+
+            if not result.success:
+                st.error(result.error)
+                st.session_state.ask_history.append(
+                    {"role": "assistant", "content": f"Error: {result.error}"}
+                )
+            elif result.data.empty:
+                st.info(result.message or "No data found.")
+                st.session_state.ask_history.append(
+                    {"role": "assistant", "content": result.message}
+                )
+            else:
+                from src.viz_selector import render_result
+
+                render_result(result.title, result.viz_hint, result.data)
+
+                if result.sql:
+                    with st.expander("View SQL"):
+                        st.code(result.sql, language="sql")
+
+                st.session_state.ask_history.append(
+                    {
+                        "role": "assistant",
+                        "content": result.title,
+                        "sql": result.sql,
+                        "viz": {
+                            "title": result.title,
+                            "viz_hint": result.viz_hint,
+                            "data": result.data,
+                        },
+                    }
+                )
+
+
+# --- Tab: Help & FAQ ---
 with tab4:
     from src.faq import FAQ_SECTIONS
 
