@@ -1263,7 +1263,10 @@ with tab_ask:
             st.rerun()
 
     # Handle query
-    if "ask_history" not in st.session_state:
+    if "ask_history" not in st.session_state or (
+        st.session_state.ask_history
+        and "query" not in st.session_state.ask_history[0]
+    ):
         st.session_state.ask_history = []
 
     pending = st.session_state.pop("_ask_pending", None)
