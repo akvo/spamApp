@@ -40,6 +40,18 @@ All three share the same schema:
 - value (FLOAT) — the numeric value
 - production_mt (FLOAT) — production in metric tonnes (backward compat)
 
+### district_lookup (maps districts to their parent state)
+- code (TEXT) — country ISO3 code
+- state (TEXT) — state/province name (matches admin_name in states table)
+- district (TEXT) — district name (matches admin_name in districts table)
+
+To query districts within a state, JOIN with district_lookup:
+  SELECT d.admin_name, d.value AS production_mt
+  FROM districts d
+  JOIN district_lookup dl ON d.admin_name = dl.district AND d.country_code = dl.code
+  WHERE dl.state = 'Bali' AND dl.code = 'IDN'
+  AND d.crop_code = 'RICE' AND d.variable = 'P'
+
 ## Crop Codes
 """
 
@@ -167,6 +179,12 @@ def _get_duckdb_conn() -> duckdb.DuckDBPyConnection:
             conn.execute(
                 f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{path}')"
             )
+    # District-to-state lookup for filtering districts by state
+    lookup_path = Path("data/boundaries/districts_lookup.parquet")
+    if lookup_path.exists():
+        conn.execute(
+            f"CREATE VIEW district_lookup AS SELECT * FROM read_parquet('{lookup_path}')"
+        )
     return conn
 
 
@@ -238,7 +256,7 @@ def _validate_sql(sql: str) -> tuple[bool, str]:
             return False, f"Only SELECT statements allowed, got: {statement.key}"
 
         # Check table references
-        allowed_tables = {"countries", "states", "districts"}
+        allowed_tables = {"countries", "states", "districts", "district_lookup"}
         for table in statement.find_all(sqlglot.exp.Table):
             if table.name.lower() not in allowed_tables:
                 return False, f"Unknown table: {table.name}"
