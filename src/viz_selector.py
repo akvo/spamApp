@@ -58,11 +58,21 @@ def _render_bar(
     y_col = text_cols[0]
     x_col = num_cols[0]
 
-    # Format axis label
-    if x_col == "value":
-        x_title = "Value"
-    else:
-        x_title = x_col.replace("_", " ").title()
+    # Format axis label with unit
+    _AXIS_LABELS = {
+        "value": "Value",
+        "production_mt": "Production (metric tonnes)",
+        "harvested_area_ha": "Harvested Area (hectares)",
+        "physical_area_ha": "Physical Area (hectares)",
+        "yield_tha": "Yield (t/ha)",
+        "total_ha": "Harvested Area (hectares)",
+        "total": "Total",
+        "pct": "Share (%)",
+        "weighted_avg_yield": "Yield (t/ha)",
+    }
+    x_title = _AXIS_LABELS.get(
+        x_col.lower(), x_col.replace("_", " ").title()
+    )
 
     # Determine if we need color encoding
     color_col = text_cols[1] if len(text_cols) > 1 and viz_type == "grouped_bar" else None

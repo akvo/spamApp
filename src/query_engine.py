@@ -74,6 +74,11 @@ SCHEMA_PROMPT += """
 7. crop_name values are proper case: "Wheat", "Rice", "Maize" (not lowercase)
 8. admin_name values may have no spaces (e.g., "MadhyaPradesh", "WestBengal")
 9. Always include admin_name or crop_name in SELECT so the chart shows labels
+10. Always alias the value column with the unit. Examples:
+    - value AS production_mt (for production)
+    - value AS harvested_area_ha (for harvested area)
+    - value AS yield_tha (for yield)
+    - value AS physical_area_ha (for physical area)
 
 ## Response Format
 Return ONLY a JSON object (no markdown, no explanation):
@@ -89,35 +94,35 @@ Return ONLY a JSON object (no markdown, no explanation):
 FEW_SHOT_EXAMPLES = [
     {
         "user": "Top 5 wheat producing countries",
-        "assistant": '{"intent":"ranking","sql":"SELECT admin_name, value FROM countries WHERE crop_code=\'WHEA\' AND variable=\'P\' AND tech_level=\'A\' ORDER BY value DESC LIMIT 5","title":"Top 5 Wheat Producing Countries","viz_hint":"bar"}',
+        "assistant": '{"intent":"ranking","sql":"SELECT admin_name, value AS production_mt FROM countries WHERE crop_code=\'WHEA\' AND variable=\'P\' ORDER BY value DESC LIMIT 5","title":"Top 5 Wheat Producing Countries","viz_hint":"bar"}',
     },
     {
         "user": "Show me rice production in Indian states",
-        "assistant": '{"intent":"ranking","sql":"SELECT admin_name, value FROM states WHERE crop_code=\'RICE\' AND variable=\'P\' AND tech_level=\'A\' AND country_code=\'IND\' ORDER BY value DESC LIMIT 10","title":"Rice Production by Indian State","viz_hint":"bar"}',
+        "assistant": '{"intent":"ranking","sql":"SELECT admin_name, value AS production_mt FROM states WHERE crop_code=\'RICE\' AND variable=\'P\' AND country_code=\'IND\' ORDER BY value DESC LIMIT 10","title":"Rice Production by Indian State","viz_hint":"bar"}',
     },
     {
         "user": "Compare maize yield between India and Brazil",
-        "assistant": '{"intent":"comparison","sql":"SELECT admin_name, value FROM countries WHERE crop_code=\'MAIZ\' AND variable=\'Y\' AND tech_level=\'A\' AND admin_name IN (\'India\', \'Brazil\')","title":"Maize Yield: India vs Brazil","viz_hint":"grouped_bar"}',
+        "assistant": '{"intent":"comparison","sql":"SELECT admin_name, value AS yield_tha FROM countries WHERE crop_code=\'MAIZ\' AND variable=\'Y\' AND admin_name IN (\'India\', \'Brazil\')","title":"Maize Yield: India vs Brazil","viz_hint":"grouped_bar"}',
     },
     {
         "user": "What percentage of world rice does India produce?",
-        "assistant": '{"intent":"single_value","sql":"SELECT admin_name, value, ROUND(value * 100.0 / SUM(value) OVER (), 1) as pct FROM countries WHERE crop_code=\'RICE\' AND variable=\'P\' AND tech_level=\'A\' ORDER BY value DESC LIMIT 10","title":"India Share of World Rice Production","viz_hint":"bar"}',
+        "assistant": '{"intent":"single_value","sql":"SELECT admin_name, value AS production_mt, ROUND(value * 100.0 / SUM(value) OVER (), 1) AS pct FROM countries WHERE crop_code=\'RICE\' AND variable=\'P\' ORDER BY value DESC LIMIT 10","title":"India Share of World Rice Production","viz_hint":"bar"}',
     },
     {
         "user": "Top crops in Kenya by production",
-        "assistant": '{"intent":"breakdown","sql":"SELECT crop_name, category, value FROM countries WHERE admin_name=\'Kenya\' AND variable=\'P\' AND tech_level=\'A\' AND value > 0 ORDER BY value DESC LIMIT 15","title":"Top Crops in Kenya","viz_hint":"bar"}',
+        "assistant": '{"intent":"breakdown","sql":"SELECT crop_name, category, value AS production_mt FROM countries WHERE admin_name=\'Kenya\' AND variable=\'P\' AND value > 0 ORDER BY value DESC LIMIT 15","title":"Top Crops in Kenya","viz_hint":"bar"}',
     },
     {
         "user": "Which countries have the highest wheat yield?",
-        "assistant": '{"intent":"ranking","sql":"SELECT c.admin_name, c.value as yield_tha FROM countries c JOIN countries h ON c.admin_code = h.admin_code AND c.crop_code = h.crop_code WHERE c.crop_code=\'WHEA\' AND c.variable=\'Y\' AND c.tech_level=\'A\' AND h.variable=\'H\' AND h.tech_level=\'A\' AND h.value >= 5000 ORDER BY c.value DESC LIMIT 10","title":"Top Wheat Yield Countries (min 5000 ha)","viz_hint":"bar"}',
+        "assistant": '{"intent":"ranking","sql":"SELECT c.admin_name, c.value AS yield_tha FROM countries c JOIN countries h ON c.admin_code = h.admin_code AND c.crop_code = h.crop_code WHERE c.crop_code=\'WHEA\' AND c.variable=\'Y\' AND h.variable=\'H\' AND h.value >= 5000 ORDER BY c.value DESC LIMIT 10","title":"Top Wheat Yield Countries (min 5000 ha)","viz_hint":"bar"}',
     },
     {
         "user": "Irrigated vs rainfed rice in India",
-        "assistant": '{"intent":"comparison","sql":"SELECT tech_level, SUM(value) as total FROM states WHERE crop_code=\'RICE\' AND variable=\'P\' AND tech_level IN (\'I\', \'R\') AND country_code=\'IND\' GROUP BY tech_level","title":"Rice: Irrigated vs Rainfed in India","viz_hint":"bar"}',
+        "assistant": '{"intent":"comparison","sql":"SELECT tech_level, SUM(value) AS production_mt FROM states WHERE crop_code=\'RICE\' AND variable=\'P\' AND tech_level IN (\'I\', \'R\') AND country_code=\'IND\' GROUP BY tech_level","title":"Rice: Irrigated vs Rainfed in India","viz_hint":"bar"}',
     },
     {
         "user": "Total harvested area for cereals globally",
-        "assistant": '{"intent":"breakdown","sql":"SELECT crop_name, SUM(value) as total_ha FROM countries WHERE category=\'Cereals\' AND variable=\'H\' AND tech_level=\'A\' GROUP BY crop_name ORDER BY total_ha DESC","title":"Cereal Crops by Harvested Area (Global)","viz_hint":"bar"}',
+        "assistant": '{"intent":"breakdown","sql":"SELECT crop_name, SUM(value) AS harvested_area_ha FROM countries WHERE category=\'Cereals\' AND variable=\'H\' GROUP BY crop_name ORDER BY harvested_area_ha DESC","title":"Cereal Crops by Harvested Area (Global)","viz_hint":"bar"}',
     },
 ]
 
