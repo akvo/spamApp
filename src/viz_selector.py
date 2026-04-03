@@ -21,9 +21,9 @@ def render_result(title: str, viz_hint: str, df: pd.DataFrame):
     num_cols = df.select_dtypes(include="number").columns.tolist()
     text_cols = df.select_dtypes(include="object").columns.tolist()
 
-    if viz_hint == "metric" or (len(df) == 1 and len(num_cols) == 1):
+    if (len(df) == 1 and len(num_cols) <= 2) and not text_cols:
         _render_metric(df, num_cols)
-    elif viz_hint in ("bar", "grouped_bar") and text_cols and num_cols:
+    elif text_cols and num_cols:
         _render_bar(df, text_cols, num_cols, viz_hint)
     elif viz_hint == "stacked_bar" and text_cols and num_cols:
         _render_bar(df, text_cols, num_cols, "stacked_bar")

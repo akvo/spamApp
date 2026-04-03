@@ -68,9 +68,12 @@ SCHEMA_PROMPT += """
    - NEVER use AVG(value) or SUM(value) for yield
 3. Default to variable='P' (Production) and tech_level='A' (All systems) unless specified
 4. Use the appropriate table: countries for country-level, states for state-level, districts for district-level
-5. Always include LIMIT (default 10 if not specified)
-6. crop_name values are proper case: "Wheat", "Rice", "Maize" (not lowercase)
-7. admin_name values may have no spaces (e.g., "MadhyaPradesh", "WestBengal")
+5. Always include LIMIT (default 10 if not specified, minimum 5 for rankings)
+6. Even for "which is the highest/largest" questions, return top 10 with ORDER BY DESC
+   so the user sees context. Use viz_hint "bar", not "metric"
+7. crop_name values are proper case: "Wheat", "Rice", "Maize" (not lowercase)
+8. admin_name values may have no spaces (e.g., "MadhyaPradesh", "WestBengal")
+9. Always include admin_name or crop_name in SELECT so the chart shows labels
 
 ## Response Format
 Return ONLY a JSON object (no markdown, no explanation):
