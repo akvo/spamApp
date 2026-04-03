@@ -1249,10 +1249,10 @@ with tab_ask:
 
     # Suggested queries
     suggestions = [
+        "Top coffee producing states globally, % of production",
         "Top 5 wheat producing countries",
         "Show crops in Kenya",
         "Compare rice yield: India vs China",
-        "World maize share by country",
     ]
     sugg_cols = st.columns(len(suggestions))
     for i, sugg in enumerate(suggestions):
