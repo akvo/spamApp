@@ -92,8 +92,13 @@ SCHEMA_PROMPT += """
    so the user sees context. Use viz_hint "bar", not "metric"
 7. crop_name values are proper case: "Wheat", "Rice", "Maize" (not lowercase)
 8. admin_name values may have no spaces (e.g., "MadhyaPradesh", "WestBengal")
-9. Always include admin_name or crop_name in SELECT so the chart shows labels
-10. For "where in [country]" questions, default to the states table (level 1),
+   and may contain special characters (e.g., "Murang'a").
+   For location name matching, use LOWER(admin_name) LIKE '%keyword%' instead of exact match.
+   Example: WHERE LOWER(admin_name) LIKE '%murang%' instead of admin_name = "Murang'a"
+9. A "county" or "province" is typically a state (level 1). Search states first.
+   If not found, try districts. Use the district_lookup table to check.
+10. Always include admin_name or crop_name in SELECT so the chart shows labels
+11. For "where in [country]" questions, default to the states table (level 1),
     not districts. Only use districts if the user specifically mentions districts
     or asks about a specific state's sub-regions.
 11. Always alias the value column with the unit. Examples:

@@ -1293,6 +1293,9 @@ with tab_ask:
             st.error(r.error)
         elif r.data.empty:
             st.info(r.message or "No data found.")
+            if r.sql:
+                with st.expander("View SQL"):
+                    st.code(r.sql, language="sql")
         else:
             from src.viz_selector import render_result
 
