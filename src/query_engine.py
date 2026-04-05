@@ -86,9 +86,13 @@ SCHEMA_PROMPT += """
    - NEVER use AVG(value) or SUM(value) for yield
    - NEVER rank yield without the harvested area >= 5000 filter
 3. Default to variable='P' (Production) and tech_level='A' (All systems) unless specified
-4. Use the appropriate table: countries for country-level, states for state-level, districts for district-level
-5. Always include LIMIT (default 10 if not specified, minimum 5 for rankings)
-6. Even for "which is the highest/largest" questions, return top 10 with ORDER BY DESC
+4. The database has state-level data for ALL countries including the US, India, Brazil, etc.
+   ALL countries have states/provinces AND districts. Do NOT assume any country is missing.
+   Use the appropriate table: countries for country-level, states for state-level, districts for district-level
+5. If the user misspells a location, use LIKE with the closest match. Do NOT return an error
+   saying the location doesn't exist — try a fuzzy search with LIKE first.
+6. Always include LIMIT (default 10 if not specified, minimum 5 for rankings)
+7. Even for "which is the highest/largest" questions, return top 10 with ORDER BY DESC
    so the user sees context. Use viz_hint "bar", not "metric"
 7. crop_name values are proper case: "Wheat", "Rice", "Maize" (not lowercase)
 8. admin_name values may have no spaces (e.g., "MadhyaPradesh", "WestBengal")
