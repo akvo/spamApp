@@ -9,7 +9,10 @@ pyarrow
 typer[all]
 rich
 folium
+altair
 streamlit
+duckdb
+sqlglot
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
 chromadb
