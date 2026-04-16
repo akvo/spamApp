@@ -99,7 +99,7 @@ def _cached_boundary_gdf(country_code, level):
 
 # --- Page config ---
 st.set_page_config(
-    page_title="SPAM Crop Analyzer",
+    page_title="Crop Monitor",
     page_icon="\U0001f33e",
     layout="wide",
 )
@@ -348,8 +348,14 @@ var_code = _VAR_NAME_TO_CODE.get(variable, "P")
 
 
 # --- Header ---
-st.title("SPAM  Crop Analyzer")
-st.caption("Explore crop production, area, and yield across 46 crops and 27,000+ regions worldwide")
+st.title("Crop Monitor")
+st.caption(
+    "Explore crop production, area, and yield across 46 crops and 27,000+ regions "
+    "worldwide. Source: [SPAM](https://www.mapspam.info/)"
+)
+st.caption(
+    "[Tutorial](https://www.loom.com/share/3257bff5039d4183b1b659fc969a5dd5)"
+)
 
 # --- Tabs ---
 tab1, tab2, tab3, tab_ask, tab4 = st.tabs(
