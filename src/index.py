@@ -68,22 +68,14 @@ def build_index(
     existing_keys = set()
     if output_path.exists():
         existing_df = pd.read_parquet(output_path)
-        if "tech_level" in existing_df.columns and "variable" in existing_df.columns:
+        if "tech_level" in existing_df.columns:
             existing_keys = set(
                 existing_df[
                     ["admin_code", "crop_code", "variable", "tech_level"]
                 ].itertuples(index=False)
             )
-        elif "variable" in existing_df.columns:
-            existing_keys = set(
-                existing_df[["admin_code", "crop_code", "variable"]].itertuples(
-                    index=False
-                )
-            )
-        else:
-            existing_keys = set(
-                existing_df[["admin_code", "crop_code"]].itertuples(index=False)
-            )
+        # Old index without tech_level — don't populate existing_keys
+        # so I/R will be added alongside existing A rows
 
     # Determine what to process
     crop_codes = crops if crops else list(CROPS.keys())
@@ -143,20 +135,14 @@ def build_index(
             for tech in tech_codes:
                 combo_done += 1
 
-                # Check if already indexed
+                # Check if already indexed (with tech_level in key)
                 sample_key = (
                     boundaries_gdf.iloc[0]["admin_code"],
                     crop_code,
                     var_code,
                     tech,
                 )
-                # Also check without tech_level for backward compat
-                sample_key_old = (
-                    boundaries_gdf.iloc[0]["admin_code"],
-                    crop_code,
-                    var_code,
-                )
-                if sample_key in existing_keys or sample_key_old in existing_keys:
+                if sample_key in existing_keys:
                     continue
 
                 try:
