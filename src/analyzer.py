@@ -200,6 +200,10 @@ def _try_index_lookup(
 
     has_tech = "tech_level" in location_df.columns
 
+    # Drop legacy null tech_level rows when real A/I/R rows exist
+    if has_tech and location_df["tech_level"].notna().any():
+        location_df = location_df[location_df["tech_level"].notna()]
+
     crop_data = pd.DataFrame(
         {
             "crop_code": location_df["crop_code"].values,
@@ -246,6 +250,7 @@ def rank_by_crop(
     country_code: str | None = None,
     parent_name: str | None = None,
     variable: str = "P",
+    tech_level: str = "A",
 ) -> pd.DataFrame:
     """Top N regions for a crop from pre-built parquet index.
 
@@ -253,6 +258,7 @@ def rank_by_crop(
         country_code: Filter to this country only.
         parent_name: Filter to children of this parent region.
         variable: Variable code to rank by (P, H, A, Y). Default: P.
+        tech_level: Technology level: A (all systems), I (irrigated), R (rainfed). Default: A.
 
     Returns DataFrame sorted descending by value, with a 'rank_value' column.
     """
@@ -271,6 +277,18 @@ def rank_by_crop(
     # Filter by variable if the column exists
     if "variable" in crop_df.columns:
         crop_df = crop_df[crop_df["variable"] == variable]
+
+    # Filter by tech level
+    if "tech_level" in crop_df.columns:
+        # Drop legacy rows with null tech_level (duplicates of "A" rows)
+        if crop_df["tech_level"].notna().any():
+            crop_df = crop_df[crop_df["tech_level"].notna()]
+        else:
+            crop_df["tech_level"] = "A"
+        crop_df = crop_df[crop_df["tech_level"] == tech_level]
+    elif tech_level != "A":
+        # Index has no tech_level column — only "A" data is available
+        return crop_df.head(0)
 
     if country_code:
         crop_df = crop_df[crop_df["country_code"] == country_code]
@@ -296,6 +314,12 @@ def rank_by_crop(
         ha_df = df[
             (df["crop_code"] == crop_code) & (df["variable"] == "H")
         ].copy()
+        if "tech_level" in ha_df.columns:
+            if ha_df["tech_level"].notna().any():
+                ha_df = ha_df[ha_df["tech_level"].notna()]
+            else:
+                ha_df["tech_level"] = "A"
+            ha_df = ha_df[ha_df["tech_level"] == tech_level]
         if country_code:
             ha_df = ha_df[ha_df["country_code"] == country_code]
         if parent_name and "parent_name" in ha_df.columns:
@@ -308,6 +332,12 @@ def rank_by_crop(
         prod_df = df[
             (df["crop_code"] == crop_code) & (df["variable"] == "P")
         ].copy()
+        if "tech_level" in prod_df.columns:
+            if prod_df["tech_level"].notna().any():
+                prod_df = prod_df[prod_df["tech_level"].notna()]
+            else:
+                prod_df["tech_level"] = "A"
+            prod_df = prod_df[prod_df["tech_level"] == tech_level]
         if country_code:
             prod_df = prod_df[prod_df["country_code"] == country_code]
         if parent_name and "parent_name" in prod_df.columns:

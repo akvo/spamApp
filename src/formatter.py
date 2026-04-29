@@ -60,21 +60,36 @@ def print_summary(result: AnalysisResult) -> None:
     console.print(table)
 
 
-def print_ranking(df: pd.DataFrame, crop_name: str) -> None:
+def print_ranking(
+    df: pd.DataFrame,
+    crop_name: str,
+    tech_level: str = "A",
+    variable: str = "P",
+) -> None:
     """Print a Rich table for crop rankings across regions."""
+    from src.crops import TECH_LEVELS
+
+    var_info = VARIABLES.get(variable, {"name": "Production", "unit": "mt"})
+    var_name = var_info["name"]
+    unit = var_info["unit"]
+    tech_label = TECH_LEVELS.get(tech_level, "All systems combined")
+    is_yield = variable == "Y"
+
     console.print()
-    table = Table(title=f"Top {len(df)} Regions — {crop_name} Production")
+    table = Table(title=f"Top {len(df)} Regions — {crop_name} {var_name} ({tech_label})")
     table.add_column("Rank", style="dim", width=4)
     table.add_column("Region", style="bold")
     table.add_column("Country")
-    table.add_column("Production (mt)", justify="right")
+    table.add_column(f"{var_name} ({unit})", justify="right")
 
+    val_col = "rank_value" if "rank_value" in df.columns else "production_mt"
     for i, (_, row) in enumerate(df.iterrows(), 1):
+        val = row[val_col]
         table.add_row(
             str(i),
             row["admin_name"],
             row.get("country_name", ""),
-            f"{row['production_mt']:,.0f}",
+            f"{val:,.2f}" if is_yield else f"{val:,.0f}",
         )
 
     console.print(table)

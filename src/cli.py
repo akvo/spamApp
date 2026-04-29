@@ -77,21 +77,31 @@ def ranking(
     index_dir: Annotated[
         str, typer.Option("--index", help="Path to index directory")
     ] = "data/index",
+    tech: Annotated[
+        str,
+        typer.Option("--tech", "-t", help="Technology: A (all), I (irrigated), R (rainfed)"),
+    ] = "A",
 ) -> None:
     """Show top regions for a specific crop (requires pre-built index)."""
     crop_code = crop_code.upper()
+    tech = tech.upper()
     if crop_code not in CROPS:
         console.print(f"[red]Unknown crop code:[/red] {crop_code}")
         raise typer.Exit(1)
+    if tech not in ("A", "I", "R"):
+        console.print(f"[red]Invalid tech level:[/red] {tech}. Must be A, I, or R.")
+        raise typer.Exit(1)
 
     try:
-        df = rank_by_crop(crop_code, admin_level=level, index_dir=Path(index_dir), top_n=top)
+        df = rank_by_crop(
+            crop_code, admin_level=level, index_dir=Path(index_dir), top_n=top, tech_level=tech
+        )
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
 
     crop_name = CROPS[crop_code]["name"]
-    print_ranking(df, crop_name)
+    print_ranking(df, crop_name, tech_level=tech)
 
 
 @app.command()

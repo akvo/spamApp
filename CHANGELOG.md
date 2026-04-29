@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-04-22
+- feat: Tech level selector (All Systems / Irrigated / Rainfed) for Crop Rankings and Global Comparisons
+- fix: Double-counting bug in Global Comparisons tab (A+I+R summed together, now filters by tech level)
+- analyzer.py: `rank_by_crop()` accepts `tech_level` param (default "A"), filters index + yield sub-queries
+- cli.py: `ranking` command gains `--tech / -t` option (A, I, R)
+- formatter.py: `print_ranking()` shows dynamic title/columns based on tech level and variable
+- app.py: Tab 2 + Tab 3 gain horizontal radio button for technology type
+
 ## 2026-03-22
 - T1: crops.py — 46 crop codes with categories, tech levels, variables, parse_filename()
 - T2: Test fixtures — tiny GeoTIFF, test polygons, test ZIP in conftest.py

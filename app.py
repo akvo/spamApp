@@ -34,7 +34,7 @@ def _cached_analyze(location, admin_level, variable, year=2020, _v=_CACHE_VERSIO
 
 
 @st.cache_data(show_spinner=False)
-def _cached_rank(crop_code, admin_level, top_n, country_code=None, variable="P"):
+def _cached_rank(crop_code, admin_level, top_n, country_code=None, variable="P", tech_level="A"):
     """Cache ranking results."""
     return rank_by_crop(
         crop_code,
@@ -43,6 +43,7 @@ def _cached_rank(crop_code, admin_level, top_n, country_code=None, variable="P")
         top_n=top_n,
         country_code=country_code,
         variable=variable,
+        tech_level=tech_level,
     )
 
 
@@ -658,8 +659,10 @@ with tab1:
 
 # --- Tab 2: Crop Rankings ---
 with tab2:
-    # Controls: just crop selector + top N + button
-    r1, r2, r3 = st.columns([3, 1, 1])
+    # Controls: crop selector + top N + tech level + button
+    r1, r2, r3, r4 = st.columns([3, 1, 2, 1])
+
+    _RANK_TECH_OPTIONS = {"All Systems": "A", "Irrigated": "I", "Rainfed": "R"}
 
     with r1:
         available_crops = _crops_with_data(country_code, rank_level)
@@ -676,6 +679,14 @@ with tab2:
         )
 
     with r3:
+        rank_tech_label = st.selectbox(
+            "Technology",
+            options=list(_RANK_TECH_OPTIONS.keys()),
+            key="rank_tech",
+        )
+        rank_tech = _RANK_TECH_OPTIONS[rank_tech_label]
+
+    with r4:
         st.markdown("<br>", unsafe_allow_html=True)
         rank_btn = st.button(
             "Show Rankings", type="primary", use_container_width=True
@@ -687,18 +698,19 @@ with tab2:
         level_desc = "Districts"
         rank_title = (
             f"{crop_name} — {selected_location} vs other districts in {state_name}"
+            f" ({rank_tech_label})"
         )
     else:
         child_name = {0: "States", 1: "Districts"}[selected_level]
         level_desc = child_name
-        rank_title = f"{crop_name} — Top {child_name} in {selected_location}"
+        rank_title = f"{crop_name} — Top {child_name} in {selected_location} ({rank_tech_label})"
 
     if rank_btn:
         try:
             # If state or district selected, filter districts to that state
             if (selected_level == 1 or is_deepest) and rank_level == 2:
                 df = _cached_rank(
-                    crop_code, rank_level, 9999, country_code, var_code
+                    crop_code, rank_level, 9999, country_code, var_code, rank_tech
                 )
                 boundary_gdf = _cached_boundary_gdf(country_code, 2)
                 if (
@@ -715,11 +727,30 @@ with tab2:
                 df = df.head(top_n).reset_index(drop=True)
             else:
                 df = _cached_rank(
-                    crop_code, rank_level, top_n, country_code, var_code
+                    crop_code, rank_level, top_n, country_code, var_code, rank_tech
                 )
+
+            # Fetch I/R breakdown for stacked chart when "All Systems" selected
+            rank_ir_df = None
+            if rank_tech == "A" and not df.empty:
+                top_regions = set(df["admin_name"])
+                ir_parts = []
+                for t in ("I", "R"):
+                    tdf = _cached_rank(
+                        crop_code, rank_level, 9999, country_code, var_code, t
+                    )
+                    if not tdf.empty and "tech_level" in tdf.columns:
+                        tdf = tdf[tdf["admin_name"].isin(top_regions)]
+                        if not tdf.empty:
+                            ir_parts.append(tdf)
+                if ir_parts:
+                    rank_ir_df = pd.concat(ir_parts, ignore_index=True)
+
             st.session_state.ranking_result = df
+            st.session_state.ranking_ir = rank_ir_df
             st.session_state.ranking_crop = crop_name
             st.session_state.ranking_title = rank_title
+            st.session_state.ranking_tech = rank_tech
             st.session_state.ranking_highlight = (
                 selected_location if is_deepest else None
             )
@@ -804,7 +835,59 @@ with tab2:
         # Bar chart — highlight selected region if at deepest level
         st.subheader(ranking_title)
 
-        if highlight:
+        ranking_ir = st.session_state.get("ranking_ir")
+        rank_sort_order = ranking_df.sort_values(
+            "rank_value", ascending=False
+        )["admin_name"].tolist()
+
+        has_ir_stack = (
+            ranking_ir is not None
+            and not ranking_ir.empty
+            and "tech_level" in ranking_ir.columns
+            and not highlight
+        )
+
+        if has_ir_stack:
+            # Stacked bar: Irrigated + Rainfed breakdown
+            stack_df = ranking_ir.copy()
+            stack_df["tech_label"] = stack_df["tech_level"].map(
+                {"I": "Irrigated", "R": "Rainfed"}
+            )
+            chart = (
+                alt.Chart(stack_df)
+                .mark_bar(cornerRadiusEnd=2)
+                .encode(
+                    x=alt.X(
+                        "rank_value:Q",
+                        title=rank_col_label,
+                        stack="zero",
+                    ),
+                    y=alt.Y(
+                        "admin_name:N",
+                        sort=rank_sort_order,
+                        title="",
+                    ),
+                    color=alt.Color(
+                        "tech_label:N",
+                        title="System",
+                        scale=alt.Scale(
+                            domain=["Irrigated", "Rainfed"],
+                            range=["#2171b5", "#2e8b2e"],
+                        ),
+                    ),
+                    tooltip=[
+                        alt.Tooltip("admin_name:N", title="Region"),
+                        alt.Tooltip("tech_label:N", title="System"),
+                        alt.Tooltip(
+                            "rank_value:Q",
+                            title=rank_col_label,
+                            format=rank_fmt,
+                        ),
+                    ],
+                )
+                .properties(height=max(300, len(ranking_df) * 35))
+            )
+        elif highlight:
             ranking_df = ranking_df.copy()
             ranking_df["_highlight"] = ranking_df["admin_name"].apply(
                 lambda x: "Selected" if x == highlight else "Other"
@@ -879,7 +962,7 @@ with tab2:
                 # Get ALL data for these regions (not just top N)
                 try:
                     all_ranked = _cached_rank(
-                        crop_code, rank_level, 9999, country_code, var_code
+                        crop_code, rank_level, 9999, country_code, var_code, rank_tech
                     )
                     if rank_level == 2 and state_name != "(All)":
                         state_districts = set(boundary_gdf[name_col])
@@ -997,7 +1080,9 @@ with tab2:
 
 # --- Tab 3: Global Comparisons ---
 with tab3:
-    g1, g2, g3 = st.columns([3, 2, 1])
+    g1, g2, g3, g4 = st.columns([3, 2, 2, 1])
+
+    _GC_TECH_OPTIONS = {"All Systems": "A", "Irrigated": "I", "Rainfed": "R"}
 
     with g1:
         # Global comparisons: show all crops, not filtered by sidebar country
@@ -1017,6 +1102,14 @@ with tab3:
         )
 
     with g3:
+        gc_tech_label = st.selectbox(
+            "Technology",
+            options=list(_GC_TECH_OPTIONS.keys()),
+            key="gc_tech",
+        )
+        gc_tech = _GC_TECH_OPTIONS[gc_tech_label]
+
+    with g4:
         st.markdown("<br>", unsafe_allow_html=True)
         gc_btn = st.button("Compare", type="primary", use_container_width=True)
 
@@ -1026,6 +1119,18 @@ with tab3:
             st.error(f"No index found for level {gc_level}.")
         else:
             idx = pd.read_parquet(index_path)
+
+            # Filter by tech level to avoid double-counting (A = I + R)
+            if "tech_level" in idx.columns:
+                if idx["tech_level"].notna().any():
+                    idx = idx[idx["tech_level"].notna()]
+                else:
+                    idx["tech_level"] = "A"
+                idx = idx[idx["tech_level"] == gc_tech]
+            elif gc_tech != "A":
+                # Index has no tech_level column — only "A" data available
+                idx = idx.head(0)
+
             crop_idx = idx[idx["crop_code"] == gc_crop_code].copy()
 
             if "variable" not in crop_idx.columns:
@@ -1040,13 +1145,17 @@ with tab3:
                 st.session_state.gc_result_data = crop_idx
                 st.session_state.gc_result_crop = gc_crop_name
                 st.session_state.gc_result_level = gc_level
+                st.session_state.gc_result_tech = gc_tech
 
     gc_data = st.session_state.get("gc_result_data")
     gc_crop = st.session_state.get("gc_result_crop")
     gc_lvl = st.session_state.get("gc_result_level")
 
     # Don't show stale results if inputs have changed
-    if gc_data is not None and (gc_crop != gc_crop_name or gc_lvl != gc_level):
+    gc_tech_stored = st.session_state.get("gc_result_tech")
+    if gc_data is not None and (
+        gc_crop != gc_crop_name or gc_lvl != gc_level or gc_tech_stored != gc_tech
+    ):
         gc_data = None
 
     if gc_data is None:
@@ -1059,7 +1168,7 @@ with tab3:
     else:
         st.markdown("---")
         level_name = {0: "Countries", 1: "States"}[gc_lvl]
-        st.subheader(f"{gc_crop} — Global Comparison ({level_name})")
+        st.subheader(f"{gc_crop} — Global Comparison ({level_name}, {gc_tech_label})")
 
         # Pivot: one row per region, columns for each variable
         pivot = gc_data.pivot_table(

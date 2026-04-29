@@ -193,3 +193,124 @@ class TestRankByCrop:
     def test_missing_index_raises(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             rank_by_crop("MAIZ", admin_level=0, index_dir=tmp_path / "nonexistent")
+
+    def test_rank_filters_by_tech_level(self, tmp_path):
+        """Each tech_level value returns only matching rows."""
+        index_df = pd.DataFrame(
+            {
+                "admin_name": ["X", "X", "X", "Y", "Y", "Y"],
+                "admin_code": ["X0", "X0", "X0", "Y0", "Y0", "Y0"],
+                "admin_level": [0] * 6,
+                "country_code": ["XX"] * 6,
+                "country_name": ["X Land", "X Land", "X Land", "Y Land", "Y Land", "Y Land"],
+                "crop_code": ["MAIZ"] * 6,
+                "crop_name": ["Maize"] * 6,
+                "category": ["Cereals"] * 6,
+                "production_mt": [1000.0, 600.0, 400.0, 500.0, 300.0, 200.0],
+                "variable": ["P"] * 6,
+                "value": [1000.0, 600.0, 400.0, 500.0, 300.0, 200.0],
+                "tech_level": ["A", "I", "R", "A", "I", "R"],
+            }
+        )
+        index_dir = tmp_path / "index"
+        index_dir.mkdir()
+        index_df.to_parquet(index_dir / "level_0.parquet")
+
+        result_a = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="A")
+        assert len(result_a) == 2
+        assert result_a.iloc[0]["rank_value"] == 1000.0
+
+        result_i = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="I")
+        assert len(result_i) == 2
+        assert result_i.iloc[0]["rank_value"] == 600.0
+
+        result_r = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="R")
+        assert len(result_r) == 2
+        assert result_r.iloc[0]["rank_value"] == 400.0
+
+    def test_rank_nan_tech_treated_as_a(self, tmp_path):
+        """When all rows have NaN tech_level, they are treated as 'A'."""
+        index_df = pd.DataFrame(
+            {
+                "admin_name": ["X", "Y"],
+                "admin_code": ["X0", "Y0"],
+                "admin_level": [0, 0],
+                "country_code": ["XX", "YY"],
+                "country_name": ["X Land", "Y Land"],
+                "crop_code": ["MAIZ", "MAIZ"],
+                "crop_name": ["Maize", "Maize"],
+                "category": ["Cereals", "Cereals"],
+                "production_mt": [1000.0, 500.0],
+                "variable": ["P", "P"],
+                "value": [1000.0, 500.0],
+                "tech_level": [None, None],
+            }
+        )
+        index_dir = tmp_path / "index"
+        index_dir.mkdir()
+        index_df.to_parquet(index_dir / "level_0.parquet")
+
+        result = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="A")
+        assert len(result) == 2
+
+        result_i = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="I")
+        assert len(result_i) == 0
+
+    def test_rank_drops_null_when_real_tech_exists(self, tmp_path):
+        """Legacy null rows are dropped when real A/I/R rows exist."""
+        index_df = pd.DataFrame(
+            {
+                "admin_name": ["X", "X", "X"],
+                "admin_code": ["X0", "X0", "X0"],
+                "admin_level": [0, 0, 0],
+                "country_code": ["XX", "XX", "XX"],
+                "country_name": ["X Land", "X Land", "X Land"],
+                "crop_code": ["MAIZ", "MAIZ", "MAIZ"],
+                "crop_name": ["Maize", "Maize", "Maize"],
+                "category": ["Cereals", "Cereals", "Cereals"],
+                "production_mt": [1000.0, 1000.0, 600.0],
+                "variable": ["P", "P", "P"],
+                "value": [1000.0, 1000.0, 600.0],
+                "tech_level": [None, "A", "I"],
+            }
+        )
+        index_dir = tmp_path / "index"
+        index_dir.mkdir()
+        index_df.to_parquet(index_dir / "level_0.parquet")
+
+        # Should get 1 row for A (null dropped, not doubled)
+        result_a = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="A")
+        assert len(result_a) == 1
+        assert result_a.iloc[0]["rank_value"] == 1000.0
+
+        result_i = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="I")
+        assert len(result_i) == 1
+        assert result_i.iloc[0]["rank_value"] == 600.0
+
+    def test_rank_default_tech_is_a(self, tmp_path):
+        """Calling without tech_level returns same as tech_level='A'."""
+        index_df = pd.DataFrame(
+            {
+                "admin_name": ["X", "X"],
+                "admin_code": ["X0", "X0"],
+                "admin_level": [0, 0],
+                "country_code": ["XX", "XX"],
+                "country_name": ["X Land", "X Land"],
+                "crop_code": ["MAIZ", "MAIZ"],
+                "crop_name": ["Maize", "Maize"],
+                "category": ["Cereals", "Cereals"],
+                "production_mt": [1000.0, 600.0],
+                "variable": ["P", "P"],
+                "value": [1000.0, 600.0],
+                "tech_level": ["A", "I"],
+            }
+        )
+        index_dir = tmp_path / "index"
+        index_dir.mkdir()
+        index_df.to_parquet(index_dir / "level_0.parquet")
+
+        default = rank_by_crop("MAIZ", index_dir=index_dir)
+        explicit = rank_by_crop("MAIZ", index_dir=index_dir, tech_level="A")
+
+        assert len(default) == len(explicit)
+        assert default.iloc[0]["rank_value"] == explicit.iloc[0]["rank_value"]
